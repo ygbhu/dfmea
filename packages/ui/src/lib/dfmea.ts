@@ -1,4 +1,4 @@
-import type { OpenChamberConfig, OpenChamberProjectAction } from '@/lib/openchamberConfig'
+import type { DfmeaProjectActionTemplate, OpenChamberConfig, OpenChamberProjectAction } from '@/lib/openchamberConfig'
 
 export interface DfmeaProjectSettings {
   enabled: boolean
@@ -40,18 +40,23 @@ export function readDfmeaSettings(config: OpenChamberConfig | null | undefined):
   }
 }
 
-export function mergeDfmeaActions(existing: OpenChamberProjectAction[] | undefined, enabled: boolean): OpenChamberProjectAction[] {
-  const safeExisting = existing ?? []
+export function mergeDfmeaActions(
+  existing: OpenChamberProjectAction[] | undefined,
+  enabled: boolean,
+  templates?: DfmeaProjectActionTemplate[],
+): OpenChamberProjectAction[] {
+  const safeExisting = existing ?? [];
   if (!enabled) {
-    return safeExisting
+    return safeExisting;
   }
 
-  const ids = new Set(safeExisting.map((item) => item.id))
-  const merged = [...safeExisting]
-  for (const action of DEFAULT_DFMEA_ACTIONS) {
+  const source = Array.isArray(templates) && templates.length > 0 ? templates : DEFAULT_DFMEA_ACTIONS;
+  const ids = new Set(safeExisting.map((item) => item.id));
+  const merged = [...safeExisting];
+  for (const action of source) {
     if (!ids.has(action.id)) {
-      merged.push(action)
+      merged.push(action);
     }
   }
-  return merged
+  return merged;
 }

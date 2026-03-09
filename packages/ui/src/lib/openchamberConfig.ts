@@ -68,6 +68,12 @@ export interface OpenChamberConfig {
   };
 }
 
+export interface OpenChamberDfmeaSettings {
+  enabled: boolean;
+  workspaceRoot: string;
+  subtreeId: string;
+}
+
 export type OpenChamberProjectActionPlatform = 'macos' | 'linux' | 'windows';
 
 export interface OpenChamberProjectAction {
@@ -654,6 +660,38 @@ export async function saveProjectActionsState(
   return updateOpenChamberConfig(project, {
     projectActions: sanitized.actions,
     projectActionsPrimaryId: sanitized.primaryActionId ?? undefined,
+  });
+}
+
+export interface DfmeaProjectActionTemplate {
+  id: string;
+  name: string;
+  command: string;
+  icon: string;
+}
+
+export async function getDfmeaProjectSettings(project: ProjectRef): Promise<OpenChamberDfmeaSettings> {
+  const config = await readOpenChamberConfig(project);
+  const raw = config?.dfmea;
+
+  return {
+    enabled: raw?.enabled === true,
+    workspaceRoot: typeof raw?.workspaceRoot === 'string' ? raw.workspaceRoot : '',
+    subtreeId: typeof raw?.subtreeId === 'string' ? raw.subtreeId : '',
+  };
+}
+
+export async function saveDfmeaProjectSettings(
+  project: ProjectRef,
+  value: Partial<OpenChamberDfmeaSettings>
+): Promise<boolean> {
+  const existing = await getDfmeaProjectSettings(project);
+  return updateOpenChamberConfig(project, {
+    dfmea: {
+      enabled: typeof value.enabled === 'boolean' ? value.enabled : existing.enabled,
+      workspaceRoot: typeof value.workspaceRoot === 'string' ? value.workspaceRoot : existing.workspaceRoot,
+      subtreeId: typeof value.subtreeId === 'string' ? value.subtreeId : existing.subtreeId,
+    },
   });
 }
 
