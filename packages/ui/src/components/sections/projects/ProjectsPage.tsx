@@ -9,6 +9,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { PROJECT_COLORS, PROJECT_ICONS, PROJECT_COLOR_MAP as COLOR_MAP, getProjectIconImageUrl } from '@/lib/projectMeta';
 import { RiCloseLine } from '@remixicon/react';
 import { WorktreeSectionContent } from '@/components/sections/openchamber/WorktreeSectionContent';
+import { DfmeaSection } from '@/components/sections/projects/DfmeaSection';
 import { ProjectActionsSection } from '@/components/sections/projects/ProjectActionsSection';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 
@@ -475,6 +476,13 @@ export const ProjectsPage: React.FC = () => {
         </div>
 
         {/* Worktree Group */}
+        <div className="mb-8">
+          <section className="px-2 pb-2 pt-0">
+            {selectedProjectRef && <DfmeaSection projectRef={selectedProjectRef} />}
+          </section>
+        </div>
+
+        {/* Project Actions Group */}
         <div className="mb-8">
           <section className="px-2 pb-2 pt-0">
             {selectedProjectRef && <ProjectActionsSection projectRef={selectedProjectRef} />}
