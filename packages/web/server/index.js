@@ -6774,6 +6774,52 @@ async function main(options = {}) {
     });
   });
 
+  app.get('/api/dfmea/context', async (req, res) => {
+    try {
+      const { directory, error } = await resolveProjectDirectory(req);
+      if (!directory) {
+        return res.status(400).json({ error });
+      }
+
+      res.json({
+        projectRoot: directory,
+        contentRoot: path.join(directory, 'content'),
+        runtimeRoot: path.join(directory, 'runtime'),
+        changesRoot: path.join(directory, 'changes'),
+        subtreeId: typeof req.query?.subtreeId === 'string' && req.query.subtreeId.trim().length > 0
+          ? req.query.subtreeId.trim()
+          : null,
+      });
+    } catch (error) {
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to resolve DFMEA context' });
+    }
+  });
+
+  app.get('/api/dfmea/project-actions-template', (_req, res) => {
+    res.json({
+      actions: [
+        {
+          id: 'dfmea-query',
+          name: 'DFMEA Query',
+          command: 'dfmea query --local',
+          icon: 'brain',
+        },
+        {
+          id: 'dfmea-complete',
+          name: 'DFMEA Complete',
+          command: 'dfmea complete --local',
+          icon: 'stack',
+        },
+        {
+          id: 'dfmea-review-apply',
+          name: 'DFMEA Review Apply',
+          command: 'dfmea review-apply --local',
+          icon: 'branch',
+        },
+      ],
+    });
+  });
+
   app.use((req, res, next) => {
     if (
       req.path.startsWith('/api/config/agents') ||
@@ -6781,6 +6827,7 @@ async function main(options = {}) {
       req.path.startsWith('/api/config/mcp') ||
       req.path.startsWith('/api/config/settings') ||
       req.path.startsWith('/api/config/skills') ||
+      req.path.startsWith('/api/dfmea') ||
       req.path.startsWith('/api/projects') ||
       req.path.startsWith('/api/fs') ||
       req.path.startsWith('/api/git') ||

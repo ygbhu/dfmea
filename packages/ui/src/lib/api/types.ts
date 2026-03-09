@@ -919,6 +919,26 @@ export interface GitHubAPI {
   issueComments(directory: string, number: number): Promise<GitHubIssueCommentsResult>;
 }
 
+export interface DfmeaProjectActionTemplate {
+  id: string;
+  name: string;
+  command: string;
+  icon: string;
+}
+
+export interface DfmeaContextResult {
+  projectRoot: string;
+  contentRoot: string;
+  runtimeRoot: string;
+  changesRoot: string;
+  subtreeId: string | null;
+}
+
+export interface DfmeaAPI {
+  context(directory?: string): Promise<DfmeaContextResult>;
+  actionTemplates(): Promise<{ actions: DfmeaProjectActionTemplate[] }>;
+}
+
 export interface RuntimeAPIs {
   runtime: RuntimeDescriptor;
   terminal: TerminalAPI;
@@ -928,6 +948,7 @@ export interface RuntimeAPIs {
   permissions: PermissionsAPI;
   notifications: NotificationsAPI;
   github?: GitHubAPI;
+  dfmea?: DfmeaAPI;
   push?: PushAPI;
   diagnostics?: DiagnosticsAPI;
   tools: ToolsAPI;

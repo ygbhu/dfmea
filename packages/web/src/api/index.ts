@@ -8,6 +8,7 @@ import { createWebNotificationsAPI } from './notifications';
 import { createWebToolsAPI } from './tools';
 import { createWebPushAPI } from './push';
 import { createWebGitHubAPI } from './github';
+import { createWebDfmeaAPI } from './dfmea';
 
 export const createWebAPIs = (): RuntimeAPIs => ({
   runtime: { platform: 'web', isDesktop: false, isVSCode: false, label: 'web' },
@@ -20,4 +21,5 @@ export const createWebAPIs = (): RuntimeAPIs => ({
   github: createWebGitHubAPI(),
   push: createWebPushAPI(),
   tools: createWebToolsAPI(),
+  dfmea: createWebDfmeaAPI(),
 });
