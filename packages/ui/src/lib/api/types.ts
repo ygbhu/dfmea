@@ -934,9 +934,87 @@ export interface DfmeaContextResult {
   subtreeId: string | null;
 }
 
+export interface DfmeaRuntimeNodeResult {
+  id: string;
+  kind: string;
+  title: string;
+  section: string;
+  parentId: string | null;
+  refIds: string[];
+  anchor: string;
+  summary: string;
+}
+
+export interface DfmeaSearchHit {
+  subtreeId: string;
+  node: DfmeaRuntimeNodeResult;
+}
+
+export interface DfmeaSearchResult {
+  query: string;
+  results: DfmeaSearchHit[];
+}
+
+export interface DfmeaProposalOperation {
+  type: 'add_section' | 'update_section' | 'append_note';
+  file: string;
+  section: string;
+  description: string;
+}
+
+export interface DfmeaProposal {
+  proposalId: string;
+  actionId: 'complete' | 'review-apply';
+  projectId: string;
+  subtreeId: string;
+  summary: string;
+  targetFiles: string[];
+  operations: DfmeaProposalOperation[];
+  status: 'proposed' | 'confirmed' | 'applied' | 'failed';
+  createdAt: string;
+}
+
+export interface DfmeaReviewSectionUpdate {
+  section: string;
+  entries: Array<{
+    id: string;
+    kind: string;
+    title: string;
+    summary: string;
+    refs: string[];
+  }>;
+}
+
+export interface DfmeaReviewNoteUpdate {
+  section: string;
+  note: string;
+}
+
+export interface DfmeaReviewApplyRequest {
+  confirm: boolean;
+  proposal: DfmeaProposal;
+  sections: DfmeaReviewSectionUpdate[];
+  notes?: DfmeaReviewNoteUpdate[];
+}
+
+export interface DfmeaReviewApplyResult {
+  proposal: DfmeaProposal;
+  changeRecords: Array<{
+    timestamp: string;
+    kind: 'review-apply';
+    proposalId: string;
+    subtreeId: string;
+    summary: string;
+    status: 'applied' | 'failed';
+    targetFiles: string[];
+  }>;
+}
+
 export interface DfmeaAPI {
   context(directory?: string): Promise<DfmeaContextResult>;
   actionTemplates(): Promise<{ actions: DfmeaProjectActionTemplate[] }>;
+  search(payload: { directory?: string; subtreeId?: string | null; query: string }): Promise<DfmeaSearchResult>;
+  reviewApply(directory: string | undefined, payload: DfmeaReviewApplyRequest): Promise<DfmeaReviewApplyResult>;
 }
 
 export interface RuntimeAPIs {
