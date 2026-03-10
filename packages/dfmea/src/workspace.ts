@@ -1,11 +1,14 @@
-import type { DfmeaProjectContext } from './types'
+import type { DfmeaProjectContext } from './types';
+import { buildDfmeaStorageLayout } from './content';
 
 export function createDfmeaProjectContext(projectRoot: string, localSubtreeId: string | null = null): DfmeaProjectContext {
+  const layout = buildDfmeaStorageLayout(projectRoot);
+
   return {
-    projectRoot,
+    projectRoot: layout.projectRoot,
     localSubtreeId,
-    contentRoot: `${projectRoot}/content`,
-    runtimeRoot: `${projectRoot}/runtime`,
-    changesRoot: `${projectRoot}/changes`,
-  }
+    contentRoot: layout.contentRoot,
+    runtimeRoot: layout.runtimeRoot,
+    changesRoot: layout.changesRoot,
+  };
 }
