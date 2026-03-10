@@ -1061,166 +1061,96 @@ The next design discussion should focus on first-version skeleton delivery, espe
 
 ---
 
-## 17. First-Version Skeleton Delivery Direction
+## 17. Current Implementation Direction
 
-The first version should prioritize a working architecture skeleton over detailed schema finalization.
+The repository is no longer following the earlier custom-shell implementation path.
 
-The objective is to make the system operational end to end with stable boundaries, even if low-level node details remain intentionally flexible.
+The current implementation direction is:
 
-### 17.1 Repository Skeleton
+- use OpenChamber as the repository base and OpenCode-facing shell,
+- keep DFMEA as a domain-specific backend and project-layer extension,
+- strengthen runtime indexing and project-local DFMEA execution before adding more UI.
 
-Recommended system repository shape:
+### 17.1 Current Repository Shape
+
+The current repository should be understood as:
 
 ```text
 repo/
   packages/
-    orchestrator/
-    filesystem/
-    runtime-indexer/
-    dfmea-domain/
+    ui/
+    web/
+    desktop/
+    vscode/
+    dfmea/
   integrations/
     openchamber/
-  projects/
-    <project-id>/
-      project.md
-      content/
-      runtime/
-      changes/
+  docs/plans/
 ```
 
-### 17.2 Module Responsibilities
+This means earlier custom packages such as standalone `filesystem`, `runtime-indexer`, `orchestrator`, or `copilot-ui` are no longer the active implementation path in code, even if they remain useful in earlier planning documents.
 
-- `packages/orchestrator`
-  - coordinates first-version business actions,
-  - determines local workset,
-  - routes requests to read, propose, or apply flows.
-- `packages/filesystem`
-  - handles workspace initialization,
-  - handles project file reads and writes,
-  - persists `content/` and `changes/` safely.
-- `packages/runtime-indexer`
-  - generates and refreshes local runtime artifacts,
-  - maintains manifest and per-subtree runtime shards.
-- `packages/dfmea-domain`
-  - contains lightweight DFMEA semantics, terminology, and helper rules,
-  - should remain intentionally thin in the first version.
-- `integrations/openchamber`
-  - contains the DFMEA-specific integration layer or customization strategy for OpenChamber,
-  - should avoid reimplementing generic OpenCode UI behavior.
+### 17.2 Active DFMEA Direction Inside OpenChamber
 
-### 17.3 Project Workspace Skeleton
+The active direction is to add DFMEA through narrow extension seams:
 
-Recommended minimal per-project workspace:
+- `packages/dfmea/`
+  - DFMEA domain types, context, and proposal-level abstractions.
+- `packages/web/server/index.js`
+  - DFMEA backend endpoints and server-side runtime integration.
+- `packages/web/src/api/*`
+  - DFMEA web runtime adapters.
+- `packages/ui/src/lib/*`
+  - DFMEA project config, action presets, and runtime API typing.
+- `packages/ui/src/components/sections/projects/*`
+  - project-scoped DFMEA settings and action entry surfaces.
 
-```text
-projects/<project-id>/
-  project.md
-  content/
-  runtime/
-  changes/
-```
+### 17.3 Near-Term Product Priority
 
-Purpose of each item:
+The near-term priority is not richer UI.
 
-- `project.md`
-  - top-level project description and default project entry context.
-- `content/`
-  - canonical Markdown business content.
-- `runtime/`
-  - local derived retrieval and navigation layer.
-- `changes/`
-  - confirmed result history.
+The near-term priority is:
 
-### 17.4 Minimal Project Initialization
+1. stronger runtime indexing,
+2. stable project-local DFMEA storage conventions,
+3. local query / complete / review-apply backend flow,
+4. explicit reviewable mutation handling,
+5. keeping OpenChamber as the reusable shell rather than rebuilding a new one.
 
-The first-version initialization flow should:
+### 17.4 Strong Runtime Index Direction
 
-1. create `projects/<project-id>/`,
-2. create `project.md`,
-3. create empty `content/`, `runtime/`, and `changes/`,
-4. create the minimum viable runtime manifest,
-5. mark the project as ready for OpenCode-driven creation, query, and completion.
+The strongest next architectural move is to deepen `runtime/` rather than replace Markdown canonical storage.
 
-Initialization should not require a fully populated DFMEA structure.
+That means:
 
-### 17.5 First-Version End-to-End Loop
+- keep Markdown subtree files canonical,
+- improve extracted runtime nodes and edges,
+- add stronger local lookup and keyword retrieval,
+- support bounded local worksets,
+- defer any canonical database migration until the runtime layer clearly becomes the bottleneck.
 
-The first version should establish one stable loop:
+### 17.5 Current Definition of “Usable DFMEA System”
 
-1. enter project,
-2. identify local workset,
-3. run `create`, `query`, or `complete`,
-4. produce answer or proposal,
-5. use review-apply for confirmed mutations,
-6. refresh local runtime,
-7. record confirmed results in `changes/`.
+For the current repository direction, a usable DFMEA system means:
 
-This loop is more important than full schema precision in the first version.
+1. a project can expose DFMEA settings and local scope context,
+2. a DFMEA runtime adapter can resolve local content/runtime roots,
+3. local query and completion can be routed through explicit DFMEA backend endpoints,
+4. review-apply can remain a first-class confirmed mutation path,
+5. runtime index quality is sufficient to support node lookup and keyword retrieval without broad scans.
 
-### 17.6 First-Version Handler Responsibilities
+### 17.6 Delivery Principle From This Point Forward
 
-#### `create`
+From this point forward, the repository should optimize for:
 
-Purpose:
-
-- initialize a project or create a new local subtree skeleton.
-
-Rules:
-
-- may write initial skeleton files directly,
-- should focus on creating a continuation-ready structure rather than a complete DFMEA.
-
-#### `query`
-
-Purpose:
-
-- answer within the local workset using runtime-first lookup and limited source readback.
-
-Rules:
-
-- strictly read-only,
-- returns answer and evidence,
-- does not write `content/` or `changes/`.
-
-#### `complete`
-
-Purpose:
-
-- enrich the currently selected local DFMEA scope.
-
-Rules:
-
-- reads local runtime and local content,
-- generates structured proposals,
-- does not directly mutate canonical content.
-
-#### `review-apply`
-
-Purpose:
-
-- serve as the only normal write-confirmation entry for proposed mutations.
-
-Rules:
-
-- receives reviewed proposals,
-- applies confirmed updates to `content/`,
-- triggers local runtime refresh,
-- records confirmed results in `changes/`.
-
-### 17.7 First-Version Delivery Principle
-
-The first version should optimize for:
-
-- stable architecture boundaries,
-- local-first DFMEA work,
-- AI-first interaction,
-- reuse of OpenChamber as the generic OpenCode-facing shell,
-- safe mutation through review,
-- future extensibility without premature overdesign.
+- OpenChamber-compatible DFMEA backend integration,
+- strong local runtime indexing,
+- project-local retrieval and mutation safety,
+- minimal UI work until backend/runtime behavior is solid.
 
 It should not optimize for:
 
-- frozen low-level schema design,
-- full project visualization,
-- broad retrieval modes beyond local scope,
-- complete skill abstraction from day one.
+- replacing OpenChamber with a custom shell,
+- prematurely introducing PostgreSQL as canonical storage,
+- broad global retrieval modes,
+- heavy graph visualization before backend retrieval quality is ready.

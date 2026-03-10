@@ -4,7 +4,7 @@
 
 **Goal:** Deliver the first end-to-end working version of a local-first DFMEA AI agent built on OpenCode, with Markdown as the canonical source of truth and OpenChamber reused as the OpenCode-facing shell.
 
-**Architecture:** Build a pnpm TypeScript monorepo centered on `packages/orchestrator`, a file-backed `packages/filesystem`, a local `packages/runtime-indexer`, and a lightweight `packages/dfmea-domain`, while reusing OpenChamber as the OpenCode-facing shell. Treat OpenCode as the agent runtime foundation accessed through SDK or API. Keep first-version behavior local-only, business-subtree-oriented, and review-before-apply.
+**Architecture:** Build on top of the current OpenChamber repository base, keep Markdown subtree files as canonical DFMEA content, strengthen a derived runtime index for local lookup and keyword retrieval, and add DFMEA backend/runtime behavior through narrow extensions in `packages/dfmea`, `packages/web`, and `packages/ui` config surfaces. Treat OpenCode as the agent runtime foundation. Keep first-version behavior local-only, business-subtree-oriented, and review-before-apply.
 
 **Tech Stack:** pnpm workspaces, TypeScript, Next.js App Router, Vitest, Zod, Node.js filesystem APIs, OpenCode local runtime via SDK or HTTP API.
 
@@ -15,7 +15,7 @@
 This plan assumes the following first-version boundaries are already agreed:
 
 - OpenCode is the bottom agent runtime.
-- OpenChamber is the preferred first-version OpenCode-facing shell.
+- OpenChamber is now the active repository base and preferred OpenCode-facing shell.
 - The DFMEA application is the domain-specific product layer.
 - `content/` is the canonical source of truth.
 - `runtime/` is rebuildable and local-first.
@@ -25,7 +25,7 @@ This plan assumes the following first-version boundaries are already agreed:
 - The product is AI-first, not tree-first.
 - Node-level schema remains intentionally flexible in v1, as long as content follows DFMEA semantics.
 
-The main purpose of this plan is to get the skeleton operational, not to freeze every low-level format.
+The main purpose of this plan is no longer to invent a custom skeleton from scratch. It is to finish the missing DFMEA backend/runtime capabilities inside the existing OpenChamber-based repository.
 
 ---
 
@@ -389,279 +389,145 @@ These constraints are part of the product definition, not temporary shortcuts.
 
 ---
 
-### Task 1: Bootstrap the monorepo and shared developer toolchain
+## Current Remaining Buildout Plan
+
+The earlier custom-shell implementation tasks below are no longer the active repository path.
+
+From this point forward, remaining work should be understood as OpenChamber-based DFMEA backend/runtime work.
+
+### Task 1: Implement canonical DFMEA content storage conventions inside the current repo
 
 **Files:**
-- Create: `package.json`
-- Create: `pnpm-workspace.yaml`
-- Create: `tsconfig.base.json`
-- Create: `vitest.workspace.ts`
-- Create: `.gitignore`
-- Create: `README.md`
-- Create: `packages/dfmea-domain/package.json`
-- Create: `packages/dfmea-domain/tsconfig.json`
-- Create: `packages/dfmea-domain/src/index.ts`
-- Test: `packages/dfmea-domain/src/__tests__/workspace-smoke.test.ts`
+- Create: `packages/dfmea/src/content.ts`
+- Create: `packages/dfmea/src/storage.ts`
+- Modify: `packages/dfmea/src/index.ts`
+- Test: `packages/dfmea/src/content.test.ts`
 
-**Step 1: Write the failing smoke test**
+**Step 1: Write a failing test for canonical subtree file conventions**
 
-```ts
-import { describe, expect, it } from 'vitest'
-import { ACTION_IDS, QUERY_SCOPE, STORAGE_LAYERS } from '../index'
+Expected: FAIL until the DFMEA package can derive and validate canonical subtree storage paths and roots from a workspace.
 
-describe('dfmea-domain workspace constants', () => {
-  it('exposes the first-version action ids, local-only scope, and storage layers', () => {
-    expect(ACTION_IDS).toEqual({
-      create: 'create',
-      query: 'query',
-      complete: 'complete',
-      reviewApply: 'review-apply',
-    })
+**Step 2: Implement the minimum content/storage helpers**
 
-    expect(QUERY_SCOPE).toEqual({ local: 'local' })
+- derive `contentRoot`, `runtimeRoot`, `changesRoot`,
+- derive canonical subtree file locations,
+- keep Markdown as canonical storage.
 
-    expect(STORAGE_LAYERS).toEqual({
-      content: 'content',
-      runtime: 'runtime',
-      changes: 'changes',
-    })
-  })
-})
-```
+**Step 3: Run test to verify it passes**
 
-**Step 2: Run test to verify it fails**
+Run the DFMEA package test command and confirm PASS.
 
-Run: `pnpm vitest packages/dfmea-domain/src/__tests__/workspace-smoke.test.ts`
-Expected: FAIL because the workspace and package exports do not exist yet.
-
-**Step 3: Write the minimal workspace setup**
-
-Create root package manager and TypeScript wiring, then export the smallest domain constants required by the rest of the system.
-
-```ts
-export const ACTION_IDS = {
-  create: 'create',
-  query: 'query',
-  complete: 'complete',
-  reviewApply: 'review-apply',
-} as const
-
-export const QUERY_SCOPE = {
-  local: 'local',
-} as const
-
-export const STORAGE_LAYERS = {
-  content: 'content',
-  runtime: 'runtime',
-  changes: 'changes',
-} as const
-```
-
-**Step 4: Run test to verify it passes**
-
-Run: `pnpm vitest packages/dfmea-domain/src/__tests__/workspace-smoke.test.ts`
-Expected: PASS.
-
-**Step 5: Commit**
-
-```bash
-git add package.json pnpm-workspace.yaml tsconfig.base.json vitest.workspace.ts .gitignore README.md packages/dfmea-domain
-git commit -m "chore: bootstrap dfmea monorepo workspace"
-```
-
-### Task 2: Implement the project workspace skeleton and initialization flow
+### Task 2: Implement a stronger runtime index inside `packages/dfmea`
 
 **Files:**
-- Create: `packages/filesystem/package.json`
-- Create: `packages/filesystem/tsconfig.json`
-- Create: `packages/filesystem/src/index.ts`
-- Create: `packages/filesystem/src/initProjectWorkspace.ts`
-- Create: `packages/filesystem/src/readProjectContext.ts`
-- Create: `packages/filesystem/src/ensureProjectDirs.ts`
-- Test: `packages/filesystem/src/__tests__/initProjectWorkspace.test.ts`
+- Create: `packages/dfmea/src/runtimeIndex.ts`
+- Create: `packages/dfmea/src/runtimeSearch.ts`
+- Modify: `packages/dfmea/src/index.ts`
+- Test: `packages/dfmea/src/runtimeIndex.test.ts`
 
-**Step 1: Write the failing initialization test**
+**Step 1: Write a failing runtime index test**
 
-```ts
-import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
-import { initProjectWorkspace } from '../initProjectWorkspace'
+Expected: FAIL until the DFMEA package can build a runtime manifest/shard model from canonical subtree content.
 
-describe('initProjectWorkspace', () => {
-  it('creates the agreed first-version project skeleton', async () => {
-    const root = await initProjectWorkspace({
-      projectsRoot: 'tmp/projects',
-      projectId: 'demo-brake',
-      title: 'Demo Brake DFMEA',
-    })
+**Step 2: Implement the minimum runtime index**
 
-    expect(existsSync(join(root, 'project.md'))).toBe(true)
-    expect(existsSync(join(root, 'content'))).toBe(true)
-    expect(existsSync(join(root, 'runtime'))).toBe(true)
-    expect(existsSync(join(root, 'changes'))).toBe(true)
-    expect(existsSync(join(root, 'runtime', 'manifest.json'))).toBe(true)
+- manifest generation,
+- subtree-to-shard mapping,
+- extracted node summaries,
+- extracted local edges,
+- keyword-oriented lookup helpers.
 
-    const projectMd = readFileSync(join(root, 'project.md'), 'utf8')
-    expect(projectMd).toContain('Demo Brake DFMEA')
-  })
-})
-```
+**Step 3: Run test to verify it passes**
 
-**Step 2: Run test to verify it fails**
+Run the DFMEA package runtime test command and confirm PASS.
 
-Run: `pnpm vitest packages/filesystem/src/__tests__/initProjectWorkspace.test.ts`
-Expected: FAIL because filesystem primitives do not exist.
-
-**Step 3: Write the minimal filesystem implementation**
-
-Implement project initialization with this guaranteed shape:
-
-```text
-projects/<project-id>/
-  project.md
-  content/
-  runtime/
-  changes/
-```
-
-Create `runtime/manifest.json` as a minimal valid file even if no subtree exists yet.
-
-**Step 4: Run test to verify it passes**
-
-Run: `pnpm vitest packages/filesystem/src/__tests__/initProjectWorkspace.test.ts`
-Expected: PASS.
-
-**Step 5: Commit**
-
-```bash
-git add packages/filesystem
-git commit -m "feat: add project workspace initialization"
-```
-
-### Task 3: Add canonical content helpers for business-subtree Markdown files
+### Task 3: Implement backend DFMEA query context and local runtime search endpoints
 
 **Files:**
-- Create: `packages/filesystem/src/createSubtreeFile.ts`
-- Create: `packages/filesystem/src/listSubtreeFiles.ts`
-- Create: `packages/filesystem/src/readSubtreeFile.ts`
-- Test: `packages/filesystem/src/__tests__/subtreeFiles.test.ts`
+- Modify: `packages/web/server/index.js`
+- Modify: `packages/web/src/api/dfmea.ts`
+- Modify: `packages/web/src/api/index.ts`
+- Modify: `packages/ui/src/lib/api/types.ts`
 
-**Step 1: Write the failing subtree file test**
+**Step 1: Write a failing backend behavior test or reproducible command**
 
-```ts
-import { describe, expect, it } from 'vitest'
-import { createSubtreeFile, listSubtreeFiles, readSubtreeFile } from '../index'
+Expected: FAIL until `/api/dfmea/context` and the DFMEA backend can also return runtime-backed search results.
 
-describe('subtree file helpers', () => {
-  it('creates and reads a canonical subtree markdown file', async () => {
-    await createSubtreeFile({
-      projectRoot: 'tmp/projects/demo-brake',
-      relativePath: 'content/braking/brake-signal.md',
-      title: 'Brake Signal Subtree',
-      body: '# Brake Signal Subtree\n',
-    })
+**Step 2: Implement narrow DFMEA backend endpoints**
 
-    const files = await listSubtreeFiles({ projectRoot: 'tmp/projects/demo-brake' })
-    const file = await readSubtreeFile({
-      projectRoot: 'tmp/projects/demo-brake',
-      relativePath: 'content/braking/brake-signal.md',
-    })
+- local context resolution,
+- runtime-backed keyword search,
+- subtree lookup by id or title,
+- response payloads suitable for OpenChamber-side extensions.
 
-    expect(files).toContain('content/braking/brake-signal.md')
-    expect(file).toContain('Brake Signal Subtree')
-  })
-})
-```
+**Step 3: Run verification**
 
-**Step 2: Run test to verify it fails**
+Call the endpoints manually and confirm valid JSON responses.
 
-Run: `pnpm vitest packages/filesystem/src/__tests__/subtreeFiles.test.ts`
-Expected: FAIL because subtree content helpers do not exist.
-
-**Step 3: Write the minimal canonical content helpers**
-
-Important first-version rule:
-
-- do not freeze the final node schema,
-- do preserve predictable subtree file placement,
-- do ensure files are readable as Markdown and clearly represent one DFMEA business subtree.
-
-The helper should create the file and any required parent directories.
-
-**Step 4: Run test to verify it passes**
-
-Run: `pnpm vitest packages/filesystem/src/__tests__/subtreeFiles.test.ts`
-Expected: PASS.
-
-**Step 5: Commit**
-
-```bash
-git add packages/filesystem
-git commit -m "feat: add canonical subtree markdown helpers"
-```
-
-### Task 4: Implement local runtime manifest and one-file-to-one-shard indexing
+### Task 4: Implement project-scoped review-apply backend behavior
 
 **Files:**
-- Create: `packages/runtime-indexer/package.json`
-- Create: `packages/runtime-indexer/tsconfig.json`
-- Create: `packages/runtime-indexer/src/index.ts`
-- Create: `packages/runtime-indexer/src/rebuildProjectRuntime.ts`
-- Create: `packages/runtime-indexer/src/rebuildSubtreeShard.ts`
-- Create: `packages/runtime-indexer/src/updateManifest.ts`
-- Test: `packages/runtime-indexer/src/__tests__/rebuildSubtreeShard.test.ts`
+- Modify: `packages/web/server/index.js`
+- Create: `packages/dfmea/src/reviewApply.ts`
+- Modify: `packages/dfmea/src/index.ts`
 
-**Step 1: Write the failing shard rebuild test**
+**Step 1: Write a failing review-apply test or reproducible command**
 
-```ts
-import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
-import { rebuildSubtreeShard } from '../rebuildSubtreeShard'
+Expected: FAIL until the backend can accept a confirmed DFMEA proposal and write canonical content plus runtime refresh.
 
-describe('rebuildSubtreeShard', () => {
-  it('creates one runtime shard for one content subtree file', async () => {
-    const result = await rebuildSubtreeShard({
-      projectRoot: 'tmp/projects/demo-brake',
-      subtreeFile: 'content/braking/brake-signal.md',
-      subtreeId: 'brake-signal',
-    })
+**Step 2: Implement the minimum review-apply path**
 
-    expect(existsSync(join(result.shardRoot, 'meta.json'))).toBe(true)
-    expect(existsSync(join(result.shardRoot, 'nodes.json'))).toBe(true)
-    expect(existsSync(join(result.shardRoot, 'edges.json'))).toBe(true)
+- accept confirmed proposal payload,
+- write Markdown canonical content,
+- refresh affected runtime shard,
+- append confirmed result into `changes/`.
 
-    const meta = readFileSync(join(result.shardRoot, 'meta.json'), 'utf8')
-    expect(meta).toContain('brake-signal')
-  })
-})
-```
+**Step 3: Run verification**
 
-**Step 2: Run test to verify it fails**
+Execute the review-apply path manually and confirm canonical content + runtime change are both visible.
 
-Run: `pnpm vitest packages/runtime-indexer/src/__tests__/rebuildSubtreeShard.test.ts`
-Expected: FAIL because runtime indexing does not exist.
+### Task 5: Keep OpenChamber UI changes minimal and configuration-oriented
 
-**Step 3: Write the minimal runtime indexer**
+**Files:**
+- Modify only if needed: `packages/ui/src/lib/openchamberConfig.ts`
+- Modify only if needed: `packages/ui/src/lib/dfmea.ts`
+- Modify only if needed: `packages/ui/src/components/sections/projects/DfmeaSection.tsx`
 
-Implement the confirmed rule:
+**Step 1: Limit scope intentionally**
 
-- one `content` subtree file maps to one `runtime/shards/<subtree-id>/` directory.
+Do not broaden UI work beyond what is required to expose project-scoped DFMEA configuration and actions.
 
-The indexer should:
+**Step 2: Verify UI compatibility**
 
-- read the subtree file,
-- emit `meta.json`, `nodes.json`, and `edges.json`,
-- update `runtime/manifest.json`,
-- stay shallow in v1 rather than depending on frozen node schema.
+Run `bun run type-check:ui` and confirm PASS.
 
-**Step 4: Run test to verify it passes**
+### Task 6: Final verification and project audit
 
-Run: `pnpm vitest packages/runtime-indexer/src/__tests__/rebuildSubtreeShard.test.ts`
-Expected: PASS.
+**Files:**
+- Verify: `packages/dfmea/**`
+- Verify: `packages/web/**`
+- Verify: `packages/ui/**`
+- Verify: `docs/plans/*.md`
 
-**Step 5: Commit**
+**Step 1: Run verification commands**
+
+- `bun run type-check:ui`
+- `bun run build:web`
+- any added DFMEA package tests
+
+**Step 2: Manual QA**
+
+- call `/api/dfmea/context`
+- call the new DFMEA runtime search endpoint
+- call the review-apply path if implemented
+
+**Step 3: Audit remaining gaps**
+
+At the end of implementation, explicitly list:
+
+- what is already usable,
+- what remains intentionally deferred,
+- what the next backend priority should be.
 
 ```bash
 git add packages/runtime-indexer
