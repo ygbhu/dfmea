@@ -27,6 +27,7 @@ import {
   pruneRebindTimestamps,
   readTerminalInputWsControlFrame,
 } from './lib/terminal/index.js';
+import { applyDfmeaReview, getDfmeaContext, searchDfmeaProject } from './lib/dfmea/index.js';
 import webPush from 'web-push';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -6781,17 +6782,56 @@ async function main(options = {}) {
         return res.status(400).json({ error });
       }
 
-      res.json({
-        projectRoot: directory,
-        contentRoot: path.join(directory, 'content'),
-        runtimeRoot: path.join(directory, 'runtime'),
-        changesRoot: path.join(directory, 'changes'),
-        subtreeId: typeof req.query?.subtreeId === 'string' && req.query.subtreeId.trim().length > 0
+      res.json(getDfmeaContext(
+        directory,
+        typeof req.query?.subtreeId === 'string' && req.query.subtreeId.trim().length > 0
           ? req.query.subtreeId.trim()
           : null,
-      });
+      ));
     } catch (error) {
       res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to resolve DFMEA context' });
+    }
+  });
+
+  app.post('/api/dfmea/search', express.json({ limit: '50mb' }), async (req, res) => {
+    try {
+      const { directory, error } = await resolveProjectDirectory(req);
+      if (!directory) {
+        return res.status(400).json({ error });
+      }
+
+      const query = typeof req.body?.query === 'string' ? req.body.query.trim() : '';
+      if (!query) {
+        return res.status(400).json({ error: 'Search query is required' });
+      }
+
+      const subtreeId = typeof req.body?.subtreeId === 'string' && req.body.subtreeId.trim().length > 0
+        ? req.body.subtreeId.trim()
+        : null;
+
+      res.json(searchDfmeaProject({
+        projectRoot: directory,
+        subtreeId,
+        query,
+      }));
+    } catch (error) {
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to search DFMEA runtime' });
+    }
+  });
+
+  app.post('/api/dfmea/review-apply', express.json({ limit: '50mb' }), async (req, res) => {
+    try {
+      const { directory, error } = await resolveProjectDirectory(req);
+      if (!directory) {
+        return res.status(400).json({ error });
+      }
+
+      res.json(applyDfmeaReview({
+        projectRoot: directory,
+        request: req.body,
+      }));
+    } catch (error) {
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to apply DFMEA review' });
     }
   });
 
