@@ -1,0 +1,2 @@
+[console_scripts]
+dfmea = dfmea_cli.__main__:main
