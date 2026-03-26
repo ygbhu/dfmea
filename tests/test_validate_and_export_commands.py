@@ -105,6 +105,7 @@ def _seed_analysis_db(cli_runner, tmp_path: Path) -> dict:
         description="Provide rated torque",
     )
     return {
+        "comp_id": comp_payload["data"]["node_id"],
         "db_path": db_path,
         "fn_id": fn_payload["data"]["fn_id"],
         "fn_rowid": fn_payload["data"]["affected_objects"][0]["rowid"],
@@ -310,6 +311,10 @@ def test_export_markdown_review_layout_creates_index_and_component_files(
     assert any(path.name == "index.md" for path in exported_paths)
     assert any(path.parent.name == "components" for path in exported_paths)
     assert any(path.parent.name == "functions" for path in exported_paths)
+    assert any(
+        path.parent.name == "actions" and path.name == "open.md"
+        for path in exported_paths
+    )
 
     index_path = next(path for path in exported_paths if path.name == "index.md")
     component_path = next(
@@ -318,13 +323,35 @@ def test_export_markdown_review_layout_creates_index_and_component_files(
     function_path = next(
         path for path in exported_paths if path.parent.name == "functions"
     )
+    actions_path = next(
+        path
+        for path in exported_paths
+        if path.parent.name == "actions" and path.name == "open.md"
+    )
     index_content = index_path.read_text(encoding="utf-8")
     component_content = component_path.read_text(encoding="utf-8")
     function_content = function_path.read_text(encoding="utf-8")
+    actions_content = actions_path.read_text(encoding="utf-8")
 
     assert "demo" in index_content
     assert "COMP-001" in component_content
     assert seeded["fn_id"] in function_content
+    assert (
+        f"[`{seeded['comp_id']}`](components/{seeded['comp_id']}.md)" in index_content
+    )
+    assert f"[`{seeded['fn_id']}`](functions/{seeded['fn_id']}.md)" in index_content
+    assert "[Open Actions](actions/open.md)" in index_content
+    assert (
+        f"[`{seeded['fn_id']}`](../functions/{seeded['fn_id']}.md)" in component_content
+    )
+    assert (
+        f"[`{seeded['comp_id']}`](../components/{seeded['comp_id']}.md)"
+        in function_content
+    )
+    assert "[Back to index](../index.md)" in component_content
+    assert "[Back to index](../index.md)" in function_content
+    assert "[Back to index](../index.md)" in actions_content
+    assert "# Open Actions" in actions_content
 
 
 def test_validate_reports_missing_projection_as_warning(cli_runner, tmp_path: Path):

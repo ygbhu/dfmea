@@ -169,8 +169,10 @@ def _export_review_markdown(
     project_root = (out_dir / project_id).resolve()
     components_dir = project_root / "components"
     functions_dir = project_root / "functions"
+    actions_dir = project_root / "actions"
     components_dir.mkdir(parents=True, exist_ok=True)
     functions_dir.mkdir(parents=True, exist_ok=True)
+    actions_dir.mkdir(parents=True, exist_ok=True)
 
     project_map = load_projection(
         db_path=db_path,
@@ -180,20 +182,14 @@ def _export_review_markdown(
         busy_timeout_ms=busy_timeout_ms,
         retry=0,
     )
-
-    index_path = project_root / "index.md"
-    index_content = _render_review_index(
-        project_id=project_id, project_map=project_map.data
+    action_backlog = load_projection(
+        db_path=db_path,
+        project_id=project_id,
+        kind="action_backlog",
+        scope_ref="project",
+        busy_timeout_ms=busy_timeout_ms,
+        retry=0,
     )
-    index_path.write_text(index_content, encoding="utf-8")
-
-    files = [
-        {
-            "path": str(index_path),
-            "kind": "review_index_markdown",
-            "bytes": index_path.stat().st_size,
-        }
-    ]
 
     component_ids = [
         item.get("id")
@@ -210,6 +206,33 @@ def _export_review_markdown(
                 busy_timeout_ms=busy_timeout_ms,
             )
         ]
+
+    function_ids = [
+        item.get("scope_ref")
+        for item in _list_projection_scope_refs(
+            db_path=db_path,
+            project_id=project_id,
+            kind="function_dossier",
+            busy_timeout_ms=busy_timeout_ms,
+        )
+    ]
+
+    index_path = project_root / "index.md"
+    index_content = _render_review_index(
+        project_id=project_id,
+        project_map=project_map.data,
+        component_ids=component_ids,
+        function_ids=function_ids,
+    )
+    index_path.write_text(index_content, encoding="utf-8")
+
+    files = [
+        {
+            "path": str(index_path),
+            "kind": "review_index_markdown",
+            "bytes": index_path.stat().st_size,
+        }
+    ]
 
     for comp_id in component_ids:
         if comp_id is None:
@@ -234,15 +257,6 @@ def _export_review_markdown(
             }
         )
 
-    function_ids = [
-        item.get("scope_ref")
-        for item in _list_projection_scope_refs(
-            db_path=db_path,
-            project_id=project_id,
-            kind="function_dossier",
-            busy_timeout_ms=busy_timeout_ms,
-        )
-    ]
     for fn_id in function_ids:
         if fn_id is None:
             continue
@@ -266,6 +280,18 @@ def _export_review_markdown(
             }
         )
 
+    open_actions_path = actions_dir / "open.md"
+    open_actions_path.write_text(
+        _render_open_actions_markdown(action_backlog.data), encoding="utf-8"
+    )
+    files.append(
+        {
+            "path": str(open_actions_path),
+            "kind": "open_actions_markdown",
+            "bytes": open_actions_path.stat().st_size,
+        }
+    )
+
     return files
 
 
@@ -287,7 +313,13 @@ def _list_projection_scope_refs(
     return [{"scope_ref": row[0]} for row in rows]
 
 
-def _render_review_index(*, project_id: str, project_map: dict[str, Any]) -> str:
+def _render_review_index(
+    *,
+    project_id: str,
+    project_map: dict[str, Any],
+    component_ids: list[str | None],
+    function_ids: list[str | None],
+) -> str:
     counts = project_map.get("counts", {})
     lines = [
         f"# DFMEA Review Export: {project_id}",
@@ -300,6 +332,18 @@ def _render_review_index(*, project_id: str, project_map: dict[str, Any]) -> str
         "## Component Reviews",
         "",
     ]
+    for comp_id in component_ids:
+        if comp_id:
+            lines.append(f"- [`{comp_id}`](components/{comp_id}.md)")
+    if not [comp_id for comp_id in component_ids if comp_id]:
+        lines.append("- none")
+    lines.extend(["", "## Function Dossiers", ""])
+    for fn_id in function_ids:
+        if fn_id:
+            lines.append(f"- [`{fn_id}`](functions/{fn_id}.md)")
+    if not [fn_id for fn_id in function_ids if fn_id]:
+        lines.append("- none")
+    lines.extend(["", "## Action Views", "", "- [Open Actions](actions/open.md)"])
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -315,13 +359,14 @@ def _render_component_bundle_markdown(bundle: dict[str, Any]) -> str:
         f"- functions: {counts.get('functions', 0)}",
         f"- failure_modes: {counts.get('failure_modes', 0)}",
         f"- actions: {counts.get('actions', 0)}",
+        "- [Back to index](../index.md)",
         "",
         "## Functions",
         "",
     ]
     for fn in bundle.get("functions", []):
         lines.append(
-            f"- `{fn.get('id')}` (rowid {fn.get('rowid')}) - {fn.get('name', '')}"
+            f"- [`{fn.get('id')}`](../functions/{fn.get('id')}.md) (rowid {fn.get('rowid')}) - {fn.get('name', '')}"
         )
     if not bundle.get("functions"):
         lines.append("- none")
@@ -331,15 +376,19 @@ def _render_component_bundle_markdown(bundle: dict[str, Any]) -> str:
 def _render_function_dossier_markdown(dossier: dict[str, Any]) -> str:
     function = dossier.get("function", {})
     counts = dossier.get("counts", {})
+    parent = function.get("parent") or {}
     lines = [
         f"# Function Dossier: {function.get('id', 'unknown')}",
         "",
         f"- function_id: `{function.get('id', '')}`",
         f"- function_rowid: {function.get('rowid', '')}",
         f"- function_name: `{function.get('name', '')}`",
+        f"- parent_component: `{parent.get('id', '')}`",
         f"- requirements: {counts.get('requirements', 0)}",
         f"- characteristics: {counts.get('characteristics', 0)}",
         f"- failure_modes: {counts.get('failure_modes', 0)}",
+        f"- component_review: [`{parent.get('id', '')}`](../components/{parent.get('id', '')}.md)",
+        "- [Back to index](../index.md)",
         "",
         "## Failure Modes",
         "",
@@ -350,6 +399,23 @@ def _render_function_dossier_markdown(dossier: dict[str, Any]) -> str:
             f"- `{fm.get('id')}` (rowid {fm.get('rowid')}) - {fm.get('name', '')}"
         )
     if not dossier.get("failure_modes"):
+        lines.append("- none")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _render_open_actions_markdown(action_backlog: dict[str, Any]) -> str:
+    nodes = [
+        node
+        for node in action_backlog.get("nodes", [])
+        if node.get("data", {}).get("status") != "completed"
+    ]
+    lines = ["# Open Actions", "", "- [Back to index](../index.md)", ""]
+    for node in nodes:
+        parent = node.get("parent") or {}
+        lines.append(
+            f"- `{node.get('id')}` (rowid {node.get('rowid')}) - status `{node.get('data', {}).get('status', '')}` under `{parent.get('id', '')}`"
+        )
+    if not nodes:
         lines.append("- none")
     return "\n".join(lines).rstrip() + "\n"
 
