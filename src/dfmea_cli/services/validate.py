@@ -459,6 +459,43 @@ def _validate_projection_state(
         "SELECT kind, scope_ref, data FROM derived_views WHERE project_id = ? ORDER BY kind, scope_ref",
         (project_id,),
     ).fetchall()
+    available_keys = {(str(row["kind"]), str(row["scope_ref"])) for row in rows}
+
+    fn_rows = conn.execute(
+        "SELECT id FROM nodes WHERE project_id = ? AND type = 'FN' ORDER BY id",
+        (project_id,),
+    ).fetchall()
+    comp_rows = conn.execute(
+        "SELECT id FROM nodes WHERE project_id = ? AND type = 'COMP' ORDER BY id",
+        (project_id,),
+    ).fetchall()
+    expected_keys = set()
+    if comp_rows or fn_rows:
+        expected_keys.update(
+            {
+                ("project_map", "project"),
+                ("risk_register", "project"),
+                ("action_backlog", "project"),
+            }
+        )
+    expected_keys.update(
+        (("component_bundle", str(row["id"])) for row in comp_rows if row["id"])
+    )
+    expected_keys.update(
+        (("function_dossier", str(row["id"])) for row in fn_rows if row["id"])
+    )
+    for kind, scope_ref in sorted(expected_keys - available_keys):
+        issues.append(
+            _issue(
+                level="warning",
+                scope="projection",
+                kind="MISSING_PROJECTION",
+                target={"project_id": project_id, "kind": kind, "scope_ref": scope_ref},
+                reason="Expected projection row is missing.",
+                suggested_action="Run `dfmea projection rebuild` to restore derived views.",
+            )
+        )
+
     for row in rows:
         try:
             decoded = json.loads(row["data"])

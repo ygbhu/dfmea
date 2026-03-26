@@ -168,7 +168,9 @@ def _export_review_markdown(
 ) -> list[dict[str, Any]]:
     project_root = (out_dir / project_id).resolve()
     components_dir = project_root / "components"
+    functions_dir = project_root / "functions"
     components_dir.mkdir(parents=True, exist_ok=True)
+    functions_dir.mkdir(parents=True, exist_ok=True)
 
     project_map = load_projection(
         db_path=db_path,
@@ -232,6 +234,38 @@ def _export_review_markdown(
             }
         )
 
+    function_ids = [
+        item.get("scope_ref")
+        for item in _list_projection_scope_refs(
+            db_path=db_path,
+            project_id=project_id,
+            kind="function_dossier",
+            busy_timeout_ms=busy_timeout_ms,
+        )
+    ]
+    for fn_id in function_ids:
+        if fn_id is None:
+            continue
+        dossier = load_projection(
+            db_path=db_path,
+            project_id=project_id,
+            kind="function_dossier",
+            scope_ref=fn_id,
+            busy_timeout_ms=busy_timeout_ms,
+            retry=0,
+        )
+        function_path = functions_dir / f"{fn_id}.md"
+        function_path.write_text(
+            _render_function_dossier_markdown(dossier.data), encoding="utf-8"
+        )
+        files.append(
+            {
+                "path": str(function_path),
+                "kind": "function_review_markdown",
+                "bytes": function_path.stat().st_size,
+            }
+        )
+
     return files
 
 
@@ -290,6 +324,32 @@ def _render_component_bundle_markdown(bundle: dict[str, Any]) -> str:
             f"- `{fn.get('id')}` (rowid {fn.get('rowid')}) - {fn.get('name', '')}"
         )
     if not bundle.get("functions"):
+        lines.append("- none")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _render_function_dossier_markdown(dossier: dict[str, Any]) -> str:
+    function = dossier.get("function", {})
+    counts = dossier.get("counts", {})
+    lines = [
+        f"# Function Dossier: {function.get('id', 'unknown')}",
+        "",
+        f"- function_id: `{function.get('id', '')}`",
+        f"- function_rowid: {function.get('rowid', '')}",
+        f"- function_name: `{function.get('name', '')}`",
+        f"- requirements: {counts.get('requirements', 0)}",
+        f"- characteristics: {counts.get('characteristics', 0)}",
+        f"- failure_modes: {counts.get('failure_modes', 0)}",
+        "",
+        "## Failure Modes",
+        "",
+    ]
+    for card in dossier.get("failure_modes", []):
+        fm = card.get("fm", {})
+        lines.append(
+            f"- `{fm.get('id')}` (rowid {fm.get('rowid')}) - {fm.get('name', '')}"
+        )
+    if not dossier.get("failure_modes"):
         lines.append("- none")
     return "\n".join(lines).rstrip() + "\n"
 
