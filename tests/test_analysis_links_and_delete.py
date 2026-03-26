@@ -180,6 +180,18 @@ def _affected_rowids(payload: dict, node_type: str) -> list[int]:
     ]
 
 
+def _project_data(db_path: Path) -> dict:
+    conn = sqlite3.connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT data FROM projects WHERE id = ?", ("demo",)
+        ).fetchone()
+    finally:
+        conn.close()
+    assert row is not None
+    return json.loads(row[0])
+
+
 def test_link_and_unlink_requirement_and_characteristic_success(
     cli_runner, tmp_path: Path
 ):
@@ -462,6 +474,8 @@ def test_link_and_unlink_trace_success_via_fm_links(cli_runner, tmp_path: Path):
         conn.close()
 
     assert remaining_rows == []
+    assert _project_data(db_path)["canonical_revision"] == 12
+    assert _project_data(db_path)["projection_dirty"] is True
 
 
 def test_link_trace_rejects_fe_target_in_same_component(cli_runner, tmp_path: Path):
@@ -907,6 +921,8 @@ def test_delete_fc_cleans_target_causes_and_deletes_orphaned_acts(
             f'{{"due": "2026-07-01", "kind": "prevention", "owner": "Li", "status": "in-progress", "target_causes": [{fc_second}]}}',
         ),
     ]
+    assert _project_data(db_path)["canonical_revision"] == 6
+    assert _project_data(db_path)["projection_dirty"] is True
 
 
 def test_delete_non_analysis_node_fails_structurally(cli_runner, tmp_path: Path):

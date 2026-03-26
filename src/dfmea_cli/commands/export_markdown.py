@@ -21,6 +21,7 @@ def export_markdown_command(
     db: Path = typer.Option(..., "--db", exists=False, dir_okay=False, readable=True),
     project: str | None = typer.Option(None, "--project"),
     out: Path = typer.Option(..., "--out", file_okay=False),
+    layout: str = typer.Option("ledger", "--layout"),
     output_format: OutputFormat = typer.Option(OutputFormat.JSON, "--format"),
     quiet: bool = typer.Option(False, "--quiet"),
     busy_timeout_ms: int = typer.Option(DEFAULT_BUSY_TIMEOUT_MS, "--busy-timeout-ms"),
@@ -51,6 +52,7 @@ def export_markdown_command(
             db_path=context.db_path,
             project_id=context.project_id,
             out_dir=out,
+            layout=layout,
             busy_timeout_ms=context.retry_policy.busy_timeout_ms,
             retry=context.retry_policy.retry,
         )

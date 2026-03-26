@@ -10,6 +10,7 @@ import dfmea_cli.db as db_helpers
 from dfmea_cli.errors import CliError, DbBusyError
 from dfmea_cli.resolve import normalize_retry_policy, resolve_node_reference
 from dfmea_cli.services.analysis import ALLOWED_ACTION_STATUSES, ALLOWED_AP_VALUES
+from dfmea_cli.services.projections import load_projection
 
 
 QUERYABLE_NODE_TYPES = {
@@ -33,6 +34,7 @@ class QueryResult:
     data: dict[str, Any]
     busy_timeout_ms: int
     retry: int
+    projection_meta: dict[str, Any] | None = None
 
 
 def query_get(
@@ -142,135 +144,104 @@ def query_summary(
     busy_timeout_ms: int,
     retry: int,
 ) -> QueryResult:
-    def action(conn: sqlite3.Connection) -> dict[str, Any]:
-        component = resolve_node_reference(
-            conn, project_id=project_id, node_ref=comp_ref
-        )
-        _ensure_node_type(component.type, expected_type="COMP", node_ref=comp_ref)
-
-        component_node = _get_structured_node(
-            conn, project_id=project_id, node_ref=comp_ref
-        )
-        functions = _query_structured_nodes(
-            conn,
-            project_id=project_id,
-            node_type="FN",
-            parent_rowid=component.rowid,
-        )
-        function_rowids = [node["rowid"] for node in functions]
-        requirements = _query_structured_nodes(
-            conn,
-            project_id=project_id,
-            node_type="REQ",
-            parent_rowids=function_rowids,
-        )
-        characteristics = _query_structured_nodes(
-            conn,
-            project_id=project_id,
-            node_type="CHAR",
-            parent_rowids=function_rowids,
-        )
-        failure_modes = _query_structured_nodes(
-            conn,
-            project_id=project_id,
-            node_type="FM",
-            parent_rowids=function_rowids,
-        )
-        fm_rowids = [node["rowid"] for node in failure_modes]
-        failure_effects = _query_structured_nodes(
-            conn,
-            project_id=project_id,
-            node_type="FE",
-            parent_rowids=fm_rowids,
-        )
-        failure_causes = _query_structured_nodes(
-            conn,
-            project_id=project_id,
-            node_type="FC",
-            parent_rowids=fm_rowids,
-        )
-        actions = _query_structured_nodes(
-            conn,
-            project_id=project_id,
-            node_type="ACT",
-            parent_rowids=fm_rowids,
-        )
-
-        fn_rowid_set = set(function_rowids)
-        fm_parent_counts: dict[int, int] = {rowid: 0 for rowid in function_rowids}
-        req_parent_counts: dict[int, int] = {rowid: 0 for rowid in function_rowids}
-        char_parent_counts: dict[int, int] = {rowid: 0 for rowid in function_rowids}
-        act_parent_counts: dict[int, int] = {rowid: 0 for rowid in function_rowids}
-        fm_to_fn: dict[int, int] = {}
-
-        for node in failure_modes:
-            parent = node.get("parent")
-            if parent is None:
-                continue
-            fn_rowid = int(parent["rowid"])
-            if fn_rowid in fn_rowid_set:
-                fm_parent_counts[fn_rowid] = fm_parent_counts.get(fn_rowid, 0) + 1
-                fm_to_fn[node["rowid"]] = fn_rowid
-
-        for node in requirements:
-            parent = node.get("parent")
-            if parent is None:
-                continue
-            fn_rowid = int(parent["rowid"])
-            if fn_rowid in fn_rowid_set:
-                req_parent_counts[fn_rowid] = req_parent_counts.get(fn_rowid, 0) + 1
-
-        for node in characteristics:
-            parent = node.get("parent")
-            if parent is None:
-                continue
-            fn_rowid = int(parent["rowid"])
-            if fn_rowid in fn_rowid_set:
-                char_parent_counts[fn_rowid] = char_parent_counts.get(fn_rowid, 0) + 1
-
-        for node in actions:
-            parent = node.get("parent")
-            if parent is None:
-                continue
-            fm_rowid = int(parent["rowid"])
-            fn_rowid = fm_to_fn.get(fm_rowid)
-            if fn_rowid is not None:
-                act_parent_counts[fn_rowid] = act_parent_counts.get(fn_rowid, 0) + 1
-
-        function_summaries = [
-            {
-                "id": node["id"],
-                "rowid": node["rowid"],
-                "name": node["name"],
-                "requirements": req_parent_counts.get(node["rowid"], 0),
-                "characteristics": char_parent_counts.get(node["rowid"], 0),
-                "failure_modes": fm_parent_counts.get(node["rowid"], 0),
-                "actions": act_parent_counts.get(node["rowid"], 0),
-            }
-            for node in functions
-        ]
-
-        return {
-            "project_id": project_id,
-            "component": component_node,
-            "counts": {
-                "functions": len(functions),
-                "requirements": len(requirements),
-                "characteristics": len(characteristics),
-                "failure_modes": len(failure_modes),
-                "failure_effects": len(failure_effects),
-                "failure_causes": len(failure_causes),
-                "actions": len(actions),
-            },
-            "functions": function_summaries,
-        }
-
-    return _run_query_operation(
+    projection = load_projection(
         db_path=db_path,
         project_id=project_id,
+        kind="component_bundle",
+        scope_ref=comp_ref,
         busy_timeout_ms=busy_timeout_ms,
         retry=retry,
-        action=action,
+    )
+    return QueryResult(
+        db_path=Path(db_path),
+        project_id=project_id,
+        data={k: v for k, v in projection.data.items() if k != "_projection_status"},
+        busy_timeout_ms=busy_timeout_ms,
+        retry=retry,
+        projection_meta={
+            "canonical_revision": projection.canonical_revision,
+            "kind": projection.kind,
+            "scope_ref": projection.scope_ref,
+            "status": projection.data.get("_projection_status", "fresh"),
+        },
+    )
+
+
+def query_map(
+    *,
+    db_path: str | Path,
+    project_id: str,
+    busy_timeout_ms: int,
+    retry: int,
+) -> QueryResult:
+    projection = load_projection(
+        db_path=db_path,
+        project_id=project_id,
+        kind="project_map",
+        scope_ref="project",
+        busy_timeout_ms=busy_timeout_ms,
+        retry=retry,
+    )
+    return QueryResult(
+        db_path=Path(db_path),
+        project_id=project_id,
+        data={k: v for k, v in projection.data.items() if k != "_projection_status"},
+        busy_timeout_ms=busy_timeout_ms,
+        retry=retry,
+        projection_meta={
+            "canonical_revision": projection.canonical_revision,
+            "kind": projection.kind,
+            "scope_ref": projection.scope_ref,
+            "status": projection.data.get("_projection_status", "fresh"),
+        },
+    )
+
+
+def query_bundle(
+    *,
+    db_path: str | Path,
+    project_id: str,
+    comp_ref: str,
+    busy_timeout_ms: int,
+    retry: int,
+) -> QueryResult:
+    return query_summary(
+        db_path=db_path,
+        project_id=project_id,
+        comp_ref=comp_ref,
+        busy_timeout_ms=busy_timeout_ms,
+        retry=retry,
+    )
+
+
+def query_dossier(
+    *,
+    db_path: str | Path,
+    project_id: str,
+    fn_ref: str,
+    busy_timeout_ms: int,
+    retry: int,
+) -> QueryResult:
+    projection = load_projection(
+        db_path=db_path,
+        project_id=project_id,
+        kind="function_dossier",
+        scope_ref=fn_ref,
+        busy_timeout_ms=busy_timeout_ms,
+        retry=retry,
+    )
+    return QueryResult(
+        db_path=Path(db_path),
+        project_id=project_id,
+        data={k: v for k, v in projection.data.items() if k != "_projection_status"},
+        busy_timeout_ms=busy_timeout_ms,
+        retry=retry,
+        projection_meta={
+            "canonical_revision": projection.canonical_revision,
+            "kind": projection.kind,
+            "scope_ref": projection.scope_ref,
+            "status": projection.data.get("_projection_status", "fresh"),
+        },
     )
 
 
@@ -290,21 +261,31 @@ def query_by_ap(
             suggested_action="Use one of High, Medium, or Low.",
         )
 
-    def action(conn: sqlite3.Connection) -> dict[str, Any]:
-        nodes = _query_structured_nodes(conn, project_id=project_id, node_type="FC")
-        matched = [node for node in nodes if node["data"].get("ap") == ap]
-        return {
-            "project_id": project_id,
-            "count": len(matched),
-            "nodes": matched,
-        }
-
-    return _run_query_operation(
+    projection = load_projection(
         db_path=db_path,
         project_id=project_id,
+        kind="risk_register",
+        scope_ref="project",
         busy_timeout_ms=busy_timeout_ms,
         retry=retry,
-        action=action,
+    )
+    nodes = [
+        node
+        for node in projection.data["nodes"]
+        if node["type"] == "FC" and node["data"].get("ap") == ap
+    ]
+    return QueryResult(
+        db_path=Path(db_path),
+        project_id=project_id,
+        data={"project_id": project_id, "count": len(nodes), "nodes": nodes},
+        busy_timeout_ms=busy_timeout_ms,
+        retry=retry,
+        projection_meta={
+            "canonical_revision": projection.canonical_revision,
+            "kind": projection.kind,
+            "scope_ref": projection.scope_ref,
+            "status": projection.data.get("_projection_status", "fresh"),
+        },
     )
 
 
@@ -318,29 +299,35 @@ def query_by_severity(
 ) -> QueryResult:
     resolved_threshold = _validate_score_threshold(gte, option_name="gte")
 
-    def action(conn: sqlite3.Connection) -> dict[str, Any]:
-        nodes = _query_structured_nodes(conn, project_id=project_id, node_type="FM")
-        matched = []
-        for node in nodes:
-            severity = _read_int_field(
-                node,
-                field_name="severity",
-                option_name="by-severity",
-            )
-            if severity >= resolved_threshold:
-                matched.append(node)
-        return {
-            "project_id": project_id,
-            "count": len(matched),
-            "nodes": matched,
-        }
-
-    return _run_query_operation(
+    projection = load_projection(
         db_path=db_path,
         project_id=project_id,
+        kind="risk_register",
+        scope_ref="project",
         busy_timeout_ms=busy_timeout_ms,
         retry=retry,
-        action=action,
+    )
+    matched = []
+    for node in projection.data["nodes"]:
+        if node["type"] != "FM":
+            continue
+        severity = _read_int_field(
+            node, field_name="severity", option_name="by-severity"
+        )
+        if severity >= resolved_threshold:
+            matched.append(node)
+    return QueryResult(
+        db_path=Path(db_path),
+        project_id=project_id,
+        data={"project_id": project_id, "count": len(matched), "nodes": matched},
+        busy_timeout_ms=busy_timeout_ms,
+        retry=retry,
+        projection_meta={
+            "canonical_revision": projection.canonical_revision,
+            "kind": projection.kind,
+            "scope_ref": projection.scope_ref,
+            "status": projection.data.get("_projection_status", "fresh"),
+        },
     )
 
 
@@ -360,21 +347,31 @@ def query_actions(
             suggested_action="Use one of planned, in-progress, or completed.",
         )
 
-    def action(conn: sqlite3.Connection) -> dict[str, Any]:
-        nodes = _query_structured_nodes(conn, project_id=project_id, node_type="ACT")
-        matched = [node for node in nodes if node["data"].get("status") == status]
-        return {
-            "project_id": project_id,
-            "count": len(matched),
-            "nodes": matched,
-        }
-
-    return _run_query_operation(
+    projection = load_projection(
         db_path=db_path,
         project_id=project_id,
+        kind="action_backlog",
+        scope_ref="project",
         busy_timeout_ms=busy_timeout_ms,
         retry=retry,
-        action=action,
+    )
+    matched = [
+        node
+        for node in projection.data["nodes"]
+        if node["data"].get("status") == status
+    ]
+    return QueryResult(
+        db_path=Path(db_path),
+        project_id=project_id,
+        data={"project_id": project_id, "count": len(matched), "nodes": matched},
+        busy_timeout_ms=busy_timeout_ms,
+        retry=retry,
+        projection_meta={
+            "canonical_revision": projection.canonical_revision,
+            "kind": projection.kind,
+            "scope_ref": projection.scope_ref,
+            "status": projection.data.get("_projection_status", "fresh"),
+        },
     )
 
 

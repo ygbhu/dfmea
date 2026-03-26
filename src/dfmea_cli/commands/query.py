@@ -16,8 +16,11 @@ from dfmea_cli.services.query import (
     query_actions,
     query_by_ap,
     query_by_severity,
+    query_bundle,
+    query_dossier,
     query_get,
     query_list,
+    query_map,
     query_search,
     query_summary,
 )
@@ -146,6 +149,90 @@ def query_summary_command(
             comp_ref=_require_option(
                 comp, option_name="comp", command_name="query summary"
             ),
+            busy_timeout_ms=context.retry_policy.busy_timeout_ms,
+            retry=context.retry_policy.retry,
+        ),
+    )
+
+
+@query_app.command("map")
+def query_map_command(
+    db: Path = typer.Option(..., "--db", exists=False, dir_okay=False, readable=True),
+    project: str | None = typer.Option(None, "--project"),
+    output_format: OutputFormat = typer.Option(OutputFormat.JSON, "--format"),
+    quiet: bool = typer.Option(False, "--quiet"),
+    busy_timeout_ms: int = typer.Option(DEFAULT_BUSY_TIMEOUT_MS, "--busy-timeout-ms"),
+    retry: int = typer.Option(DEFAULT_RETRY, "--retry"),
+) -> None:
+    _run_query_command(
+        command_name="query map",
+        db=db,
+        project=project,
+        output_format=output_format,
+        quiet=quiet,
+        busy_timeout_ms=busy_timeout_ms,
+        retry=retry,
+        action=lambda context: query_map(
+            db_path=context.db_path,
+            project_id=context.project_id,
+            busy_timeout_ms=context.retry_policy.busy_timeout_ms,
+            retry=context.retry_policy.retry,
+        ),
+    )
+
+
+@query_app.command("bundle")
+def query_bundle_command(
+    db: Path = typer.Option(..., "--db", exists=False, dir_okay=False, readable=True),
+    project: str | None = typer.Option(None, "--project"),
+    comp: str | None = typer.Option(None, "--comp"),
+    output_format: OutputFormat = typer.Option(OutputFormat.JSON, "--format"),
+    quiet: bool = typer.Option(False, "--quiet"),
+    busy_timeout_ms: int = typer.Option(DEFAULT_BUSY_TIMEOUT_MS, "--busy-timeout-ms"),
+    retry: int = typer.Option(DEFAULT_RETRY, "--retry"),
+) -> None:
+    _run_query_command(
+        command_name="query bundle",
+        db=db,
+        project=project,
+        output_format=output_format,
+        quiet=quiet,
+        busy_timeout_ms=busy_timeout_ms,
+        retry=retry,
+        action=lambda context: query_bundle(
+            db_path=context.db_path,
+            project_id=context.project_id,
+            comp_ref=_require_option(
+                comp, option_name="comp", command_name="query bundle"
+            ),
+            busy_timeout_ms=context.retry_policy.busy_timeout_ms,
+            retry=context.retry_policy.retry,
+        ),
+    )
+
+
+@query_app.command("dossier")
+def query_dossier_command(
+    db: Path = typer.Option(..., "--db", exists=False, dir_okay=False, readable=True),
+    project: str | None = typer.Option(None, "--project"),
+    fn: str | None = typer.Option(None, "--fn"),
+    output_format: OutputFormat = typer.Option(OutputFormat.JSON, "--format"),
+    quiet: bool = typer.Option(False, "--quiet"),
+    busy_timeout_ms: int = typer.Option(DEFAULT_BUSY_TIMEOUT_MS, "--busy-timeout-ms"),
+    retry: int = typer.Option(DEFAULT_RETRY, "--retry"),
+) -> None:
+    _run_query_command(
+        command_name="query dossier",
+        db=db,
+        project=project,
+        output_format=output_format,
+        quiet=quiet,
+        busy_timeout_ms=busy_timeout_ms,
+        retry=retry,
+        action=lambda context: query_dossier(
+            db_path=context.db_path,
+            project_id=context.project_id,
+            fn_ref=_require_option(fn, option_name="fn", command_name="query dossier"),
             busy_timeout_ms=context.retry_policy.busy_timeout_ms,
             retry=context.retry_policy.retry,
         ),
@@ -338,6 +425,9 @@ def _run_query_command(
             meta=meta,
         )
 
-    payload = success_result(command=command_name, data=result.data, meta=meta)
+    enriched_meta = dict(meta)
+    if result.projection_meta is not None:
+        enriched_meta["projection"] = result.projection_meta
+    payload = success_result(command=command_name, data=result.data, meta=enriched_meta)
     emit_payload(payload, output_format=output_format, quiet=quiet)
     raise AssertionError("unreachable")

@@ -30,6 +30,18 @@ def _project_rows(db_path: Path) -> list[tuple[str, str]]:
     return rows
 
 
+def _project_data(db_path: Path, project_id: str) -> dict:
+    conn = sqlite3.connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT data FROM projects WHERE id = ?", (project_id,)
+        ).fetchone()
+    finally:
+        conn.close()
+    assert row is not None
+    return json.loads(row[0])
+
+
 def test_init_creates_db_schema_and_single_project(cli_runner, tmp_path: Path):
     db_path = tmp_path / "demo.db"
 
@@ -58,8 +70,35 @@ def test_init_creates_db_schema_and_single_project(cli_runner, tmp_path: Path):
     assert payload["meta"]["busy_timeout_ms"] == 7000
     assert payload["data"]["affected_objects"] == [{"type": "PROJECT", "id": "demo"}]
     assert db_path.exists()
-    assert _table_names(db_path) == {"fm_links", "nodes", "projects"}
+    assert _table_names(db_path) == {"derived_views", "fm_links", "nodes", "projects"}
     assert _project_rows(db_path) == [("demo", "Demo")]
+
+
+def test_init_seeds_projection_metadata(cli_runner, tmp_path: Path):
+    db_path = tmp_path / "projection-meta.db"
+
+    result = cli_runner.invoke(
+        [
+            "init",
+            "--db",
+            str(db_path),
+            "--project",
+            "demo",
+            "--name",
+            "Demo",
+            "--format",
+            "json",
+        ]
+    )
+
+    assert result.exit_code == 0
+    assert _project_data(db_path, "demo") == {
+        "canonical_revision": 0,
+        "last_projection_build_at": None,
+        "last_projection_revision": 0,
+        "projection_dirty": False,
+        "projection_schema_version": "1.0",
+    }
 
 
 def test_connect_applies_required_pragmas_and_busy_timeout(tmp_path: Path):

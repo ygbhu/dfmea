@@ -21,6 +21,15 @@ class ProjectInitResult:
     retry: int
 
 
+DEFAULT_PROJECT_DATA = {
+    "canonical_revision": 0,
+    "last_projection_build_at": None,
+    "last_projection_revision": 0,
+    "projection_dirty": False,
+    "projection_schema_version": "1.0",
+}
+
+
 def initialize_project(
     *,
     db_path: str | Path,
@@ -94,7 +103,13 @@ def _initialize_project_once(
         timestamp = _utc_now()
         conn.execute(
             "INSERT INTO projects (id, name, data, created, updated) VALUES (?, ?, ?, ?, ?)",
-            (project_id, name, json.dumps({}, sort_keys=True), timestamp, timestamp),
+            (
+                project_id,
+                name,
+                json.dumps(DEFAULT_PROJECT_DATA, sort_keys=True),
+                timestamp,
+                timestamp,
+            ),
         )
         project_count = conn.execute("SELECT COUNT(*) FROM projects").fetchone()[0]
         if project_count != 1:
@@ -184,7 +199,7 @@ def _ensure_db_is_safe_for_init(db_path: Path) -> None:
     if not table_names:
         return
 
-    expected_tables = {"projects", "nodes", "fm_links"}
+    expected_tables = {"projects", "nodes", "fm_links", "derived_views"}
     unexpected_tables = [name for name in table_names if name not in expected_tables]
     if unexpected_tables:
         raise CliError(

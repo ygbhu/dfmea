@@ -60,6 +60,18 @@ def _node_rows(
         conn.close()
 
 
+def _project_data(db_path: Path) -> dict:
+    conn = sqlite3.connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT data FROM projects WHERE id = ?", ("demo",)
+        ).fetchone()
+    finally:
+        conn.close()
+    assert row is not None
+    return json.loads(row[0])
+
+
 def test_add_sys_sub_comp_chain_returns_json(cli_runner, tmp_path: Path):
     db_path = _init_db(cli_runner, tmp_path)
 
@@ -110,6 +122,8 @@ def test_add_sys_sub_comp_chain_returns_json(cli_runner, tmp_path: Path):
         (2, "SUB-001", "SUB", 1, "demo", "Inverter", "{}"),
         (3, "COMP-001", "COMP", 2, "demo", "Stator", "{}"),
     ]
+    assert _project_data(db_path)["canonical_revision"] == 3
+    assert _project_data(db_path)["projection_dirty"] is True
 
 
 def test_update_structure_node_metadata_success(cli_runner, tmp_path: Path):
@@ -301,6 +315,8 @@ def test_delete_empty_node_succeeds(cli_runner, tmp_path: Path):
         {"type": "COMP", "id": "COMP-001", "rowid": 3}
     ]
     assert [row[1] for row in _node_rows(db_path)] == ["SYS-001", "SUB-001"]
+    assert _project_data(db_path)["canonical_revision"] == 4
+    assert _project_data(db_path)["projection_dirty"] is True
 
 
 def test_structure_ids_are_not_reused_after_delete(cli_runner, tmp_path: Path):

@@ -12,7 +12,7 @@ from dfmea_cli.errors import CliError, DbBusyError
 from dfmea_cli.resolve import normalize_retry_policy
 
 
-REQUIRED_TABLES = ("projects", "nodes", "fm_links")
+REQUIRED_TABLES = ("projects", "nodes", "fm_links", "derived_views")
 PARENT_TYPE_BY_NODE_TYPE = {
     "SYS": None,
     "SUB": "SYS",
@@ -135,6 +135,7 @@ def _run_validation_once(
                 issues=issues,
             )
         )
+        issues.extend(_validate_projection_state(conn, project_id=project_id))
 
         return issues
     finally:
@@ -410,6 +411,90 @@ def _validate_duplicate_business_ids(
                 suggested_action="Assign unique business ids and repair references if needed.",
             )
         )
+    return issues
+
+
+def _validate_projection_state(
+    conn: sqlite3.Connection,
+    *,
+    project_id: str,
+) -> list[dict[str, Any]]:
+    issues: list[dict[str, Any]] = []
+
+    project_row = conn.execute(
+        "SELECT data FROM projects WHERE id = ?",
+        (project_id,),
+    ).fetchone()
+    if project_row is None:
+        return issues
+
+    try:
+        project_data = json.loads(project_row[0] or "{}")
+    except json.JSONDecodeError:
+        return issues
+    if not isinstance(project_data, dict):
+        return issues
+
+    canonical_revision = int(project_data.get("canonical_revision", 0))
+    last_projection_revision = int(project_data.get("last_projection_revision", 0))
+    projection_dirty = bool(project_data.get("projection_dirty", False))
+
+    if projection_dirty or last_projection_revision != canonical_revision:
+        issues.append(
+            _issue(
+                level="warning",
+                scope="projection",
+                kind="STALE_PROJECTION",
+                target={
+                    "project_id": project_id,
+                    "canonical_revision": canonical_revision,
+                    "last_projection_revision": last_projection_revision,
+                },
+                reason="Projection data is stale relative to the canonical revision.",
+                suggested_action="Run `dfmea projection rebuild` to refresh derived views.",
+            )
+        )
+
+    rows = conn.execute(
+        "SELECT kind, scope_ref, data FROM derived_views WHERE project_id = ? ORDER BY kind, scope_ref",
+        (project_id,),
+    ).fetchall()
+    for row in rows:
+        try:
+            decoded = json.loads(row["data"])
+        except json.JSONDecodeError:
+            issues.append(
+                _issue(
+                    level="error",
+                    scope="projection",
+                    kind="PROJECTION_CORRUPT",
+                    target={
+                        "project_id": project_id,
+                        "kind": row["kind"],
+                        "scope_ref": row["scope_ref"],
+                    },
+                    reason="Projection data contains malformed JSON.",
+                    suggested_action="Run `dfmea projection rebuild` to recreate the corrupted derived view.",
+                )
+            )
+            continue
+
+        if not isinstance(decoded, dict):
+            issues.append(
+                _issue(
+                    level="error",
+                    scope="projection",
+                    kind="PROJECTION_CORRUPT",
+                    target={
+                        "project_id": project_id,
+                        "kind": row["kind"],
+                        "scope_ref": row["scope_ref"],
+                    },
+                    reason="Projection data must decode to a JSON object.",
+                    suggested_action="Run `dfmea projection rebuild` to recreate the corrupted derived view.",
+                )
+            )
+
     return issues
 
 

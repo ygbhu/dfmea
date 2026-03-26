@@ -352,6 +352,18 @@ def test_query_search_finds_keyword_in_json_fields(cli_runner, tmp_path: Path):
 def test_query_summary_returns_component_counts(cli_runner, tmp_path: Path):
     seeded = _seed_query_db(cli_runner, tmp_path)
 
+    rebuild_result = cli_runner.invoke(
+        [
+            "projection",
+            "rebuild",
+            "--db",
+            str(seeded["db_path"]),
+            "--format",
+            "json",
+        ]
+    )
+    assert rebuild_result.exit_code == 0, rebuild_result.stdout
+
     result = cli_runner.invoke(
         [
             "query",
@@ -380,10 +392,28 @@ def test_query_summary_returns_component_counts(cli_runner, tmp_path: Path):
         "failure_causes": 2,
         "actions": 2,
     }
+    assert payload["meta"]["projection"] == {
+        "canonical_revision": 8,
+        "kind": "component_bundle",
+        "scope_ref": seeded["comp_id"],
+        "status": "fresh",
+    }
 
 
 def test_query_by_ap_returns_high_risk_failure_causes(cli_runner, tmp_path: Path):
     seeded = _seed_query_db(cli_runner, tmp_path)
+
+    rebuild_result = cli_runner.invoke(
+        [
+            "projection",
+            "rebuild",
+            "--db",
+            str(seeded["db_path"]),
+            "--format",
+            "json",
+        ]
+    )
+    assert rebuild_result.exit_code == 0, rebuild_result.stdout
 
     result = cli_runner.invoke(
         [
@@ -407,12 +437,30 @@ def test_query_by_ap_returns_high_risk_failure_causes(cli_runner, tmp_path: Path
     assert payload["data"]["nodes"][0]["type"] == "FC"
     assert payload["data"]["nodes"][0]["rowid"] == seeded["fc_high_rowid"]
     assert payload["data"]["nodes"][0]["data"]["ap"] == "High"
+    assert payload["meta"]["projection"] == {
+        "canonical_revision": 8,
+        "kind": "risk_register",
+        "scope_ref": "project",
+        "status": "fresh",
+    }
 
 
 def test_query_by_severity_returns_failure_modes_at_or_above_threshold(
     cli_runner, tmp_path: Path
 ):
     seeded = _seed_query_db(cli_runner, tmp_path)
+
+    rebuild_result = cli_runner.invoke(
+        [
+            "projection",
+            "rebuild",
+            "--db",
+            str(seeded["db_path"]),
+            "--format",
+            "json",
+        ]
+    )
+    assert rebuild_result.exit_code == 0, rebuild_result.stdout
 
     result = cli_runner.invoke(
         [
@@ -435,10 +483,28 @@ def test_query_by_severity_returns_failure_modes_at_or_above_threshold(
     assert payload["data"]["count"] == 1
     assert payload["data"]["nodes"][0]["id"] == seeded["fm_one_id"]
     assert payload["data"]["nodes"][0]["data"]["severity"] == 8
+    assert payload["meta"]["projection"] == {
+        "canonical_revision": 8,
+        "kind": "risk_register",
+        "scope_ref": "project",
+        "status": "fresh",
+    }
 
 
 def test_query_actions_returns_actions_by_status(cli_runner, tmp_path: Path):
     seeded = _seed_query_db(cli_runner, tmp_path)
+
+    rebuild_result = cli_runner.invoke(
+        [
+            "projection",
+            "rebuild",
+            "--db",
+            str(seeded["db_path"]),
+            "--format",
+            "json",
+        ]
+    )
+    assert rebuild_result.exit_code == 0, rebuild_result.stdout
 
     result = cli_runner.invoke(
         [
@@ -462,6 +528,134 @@ def test_query_actions_returns_actions_by_status(cli_runner, tmp_path: Path):
     assert payload["data"]["nodes"][0]["type"] == "ACT"
     assert payload["data"]["nodes"][0]["id"] == seeded["act_planned_id"]
     assert payload["data"]["nodes"][0]["data"]["status"] == "planned"
+    assert payload["meta"]["projection"] == {
+        "canonical_revision": 8,
+        "kind": "action_backlog",
+        "scope_ref": "project",
+        "status": "fresh",
+    }
+
+
+def test_query_map_returns_project_navigation_view(cli_runner, tmp_path: Path):
+    seeded = _seed_query_db(cli_runner, tmp_path)
+
+    rebuild_result = cli_runner.invoke(
+        [
+            "projection",
+            "rebuild",
+            "--db",
+            str(seeded["db_path"]),
+            "--format",
+            "json",
+        ]
+    )
+    assert rebuild_result.exit_code == 0, rebuild_result.stdout
+
+    result = cli_runner.invoke(
+        [
+            "query",
+            "map",
+            "--db",
+            str(seeded["db_path"]),
+            "--format",
+            "json",
+        ]
+    )
+
+    payload = _payload(result)
+    assert result.exit_code == 0
+    assert payload["command"] == "query map"
+    assert payload["data"]["project"]["id"] == "demo"
+    assert payload["meta"]["projection"] == {
+        "canonical_revision": 8,
+        "kind": "project_map",
+        "scope_ref": "project",
+        "status": "fresh",
+    }
+
+
+def test_query_bundle_returns_component_bundle(cli_runner, tmp_path: Path):
+    seeded = _seed_query_db(cli_runner, tmp_path)
+
+    rebuild_result = cli_runner.invoke(
+        [
+            "projection",
+            "rebuild",
+            "--db",
+            str(seeded["db_path"]),
+            "--format",
+            "json",
+        ]
+    )
+    assert rebuild_result.exit_code == 0, rebuild_result.stdout
+
+    result = cli_runner.invoke(
+        [
+            "query",
+            "bundle",
+            "--db",
+            str(seeded["db_path"]),
+            "--comp",
+            seeded["comp_id"],
+            "--format",
+            "json",
+        ]
+    )
+
+    payload = _payload(result)
+    assert result.exit_code == 0
+    assert payload["command"] == "query bundle"
+    assert payload["data"]["component"]["id"] == seeded["comp_id"]
+    assert payload["data"]["counts"]["failure_modes"] == 2
+    assert payload["meta"]["projection"] == {
+        "canonical_revision": 8,
+        "kind": "component_bundle",
+        "scope_ref": seeded["comp_id"],
+        "status": "fresh",
+    }
+
+
+def test_query_dossier_returns_function_dossier(cli_runner, tmp_path: Path):
+    seeded = _seed_query_db(cli_runner, tmp_path)
+
+    rebuild_result = cli_runner.invoke(
+        [
+            "projection",
+            "rebuild",
+            "--db",
+            str(seeded["db_path"]),
+            "--format",
+            "json",
+        ]
+    )
+    assert rebuild_result.exit_code == 0, rebuild_result.stdout
+
+    result = cli_runner.invoke(
+        [
+            "query",
+            "dossier",
+            "--db",
+            str(seeded["db_path"]),
+            "--fn",
+            seeded["fn_id"],
+            "--format",
+            "json",
+        ]
+    )
+
+    payload = _payload(result)
+    assert result.exit_code == 0
+    assert payload["command"] == "query dossier"
+    assert payload["data"]["function"]["id"] == seeded["fn_id"]
+    assert len(payload["data"]["requirements"]) == 1
+    assert len(payload["data"]["characteristics"]) == 1
+    assert len(payload["data"]["failure_modes"]) == 2
+    assert payload["meta"]["projection"] == {
+        "canonical_revision": 8,
+        "kind": "function_dossier",
+        "scope_ref": seeded["fn_id"],
+        "status": "fresh",
+    }
 
 
 def test_query_get_returns_structured_failure_for_malformed_node_json(

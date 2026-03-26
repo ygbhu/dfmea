@@ -43,10 +43,22 @@ SCHEMA_STATEMENTS = (
       PRIMARY KEY (from_rowid, to_fm_rowid)
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS derived_views (
+      project_id          TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      kind                TEXT NOT NULL,
+      scope_ref           TEXT NOT NULL,
+      canonical_revision  INTEGER NOT NULL,
+      built_at            TEXT NOT NULL,
+      data                TEXT NOT NULL,
+      PRIMARY KEY (project_id, kind, scope_ref)
+    )
+    """,
     "CREATE INDEX IF NOT EXISTS idx_node_type ON nodes(type, project_id)",
     "CREATE INDEX IF NOT EXISTS idx_node_parent ON nodes(parent_id)",
     "CREATE INDEX IF NOT EXISTS idx_node_id ON nodes(id) WHERE id IS NOT NULL",
     "CREATE INDEX IF NOT EXISTS idx_fm_links_to ON fm_links(to_fm_rowid)",
+    "CREATE INDEX IF NOT EXISTS idx_derived_views_kind ON derived_views(project_id, kind)",
 )
 
 

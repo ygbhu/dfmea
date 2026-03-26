@@ -37,6 +37,7 @@ def test_installed_dfmea_help_lists_command_tree() -> None:
     assert result.returncode == 0, result.stderr or result.stdout
     for name in [
         "init",
+        "projection",
         "structure",
         "analysis",
         "query",

@@ -130,6 +130,18 @@ def _add_characteristic(cli_runner, db_path: Path, *, fn: str = "FN-001"):
     )
 
 
+def _project_data(db_path: Path) -> dict:
+    conn = sqlite3.connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT data FROM projects WHERE id = ?", ("demo",)
+        ).fetchone()
+    finally:
+        conn.close()
+    assert row is not None
+    return json.loads(row[0])
+
+
 def test_add_function_returns_fn_identity_and_stores_under_component(
     cli_runner, tmp_path: Path
 ):
@@ -166,6 +178,8 @@ def test_add_function_returns_fn_identity_and_stores_under_component(
         "Deliver torque",
         '{"description": "Provide rated torque"}',
     )
+    assert _project_data(db_path)["canonical_revision"] == 4
+    assert _project_data(db_path)["projection_dirty"] is True
 
 
 def test_update_function_updates_name_and_description(cli_runner, tmp_path: Path):
@@ -320,6 +334,8 @@ def test_add_update_delete_requirement_by_rowid(cli_runner, tmp_path: Path):
         conn.close()
 
     assert remaining == 0
+    assert _project_data(db_path)["canonical_revision"] == 7
+    assert _project_data(db_path)["projection_dirty"] is True
 
 
 def test_add_update_delete_characteristic_by_rowid(cli_runner, tmp_path: Path):

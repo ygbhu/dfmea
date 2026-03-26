@@ -15,6 +15,7 @@ from dfmea_cli.resolve import (
     normalize_retry_policy,
     resolve_node_reference,
 )
+from dfmea_cli.services.projections import mark_projection_dirty
 from dfmea_cli.services.structure import (
     _allocate_business_id,
     _node_identity,
@@ -1078,6 +1079,7 @@ def _add_function_once(
                 target={"project_id": project_id, "parent": comp_ref},
                 suggested_action="Retry the command. If it persists, inspect SQLite insert behavior.",
             )
+        mark_projection_dirty(conn, project_id=project_id)
         conn.commit()
         return node_id, cast(int, rowid), _node_identity(parent), parent.rowid
     except Exception:
@@ -1208,6 +1210,7 @@ def _add_failure_chain_once(
             )
             affected_objects.append({"type": "ACT", "id": act_id, "rowid": act_rowid})
 
+        mark_projection_dirty(conn, project_id=project_id)
         conn.commit()
         return fn_node, fm_id, fm_rowid, affected_objects
     except Exception:
@@ -1256,6 +1259,7 @@ def _update_function_once(
                 node.rowid,
             ),
         )
+        mark_projection_dirty(conn, project_id=project_id)
         conn.commit()
         return _node_identity(node), node.rowid, _node_identity(parent), parent.rowid
     except Exception:
@@ -1311,6 +1315,7 @@ def _add_child_node_once(
                 target={"project_id": project_id, "parent": parent_ref},
                 suggested_action="Retry the command. If it persists, inspect SQLite insert behavior.",
             )
+        mark_projection_dirty(conn, project_id=project_id)
         conn.commit()
         return cast(int, rowid), _node_identity(parent), parent.rowid
     except Exception:
@@ -1361,6 +1366,7 @@ def _update_child_node_once(
                 node.rowid,
             ),
         )
+        mark_projection_dirty(conn, project_id=project_id)
         conn.commit()
         return node.rowid, _node_identity(parent), parent.rowid
     except Exception:
@@ -1411,6 +1417,7 @@ def _delete_child_node_once(
                 affected_objects=affected_objects,
             )
         conn.execute("DELETE FROM nodes WHERE rowid = ?", (node.rowid,))
+        mark_projection_dirty(conn, project_id=project_id)
         conn.commit()
         return node.rowid, _node_identity(parent), parent.rowid, affected_objects
     except Exception:
@@ -1468,6 +1475,7 @@ def _update_analysis_node_once(
                 node.rowid,
             ),
         )
+        mark_projection_dirty(conn, project_id=project_id)
         conn.commit()
         return node.id, node.rowid, _node_identity(parent), parent.rowid
     except Exception:
@@ -1544,6 +1552,7 @@ def _mutate_fm_local_link_once(
             "UPDATE nodes SET data = ?, updated = ? WHERE rowid = ?",
             (json.dumps(data, sort_keys=True), _utc_now(), fm_node.rowid),
         )
+        mark_projection_dirty(conn, project_id=project_id)
         conn.commit()
         return fn_node, fm_node, linked_node
     except Exception:
@@ -1597,6 +1606,7 @@ def _mutate_trace_link_once(
                 "DELETE FROM fm_links WHERE from_rowid = ? AND to_fm_rowid = ?",
                 (source_node.rowid, to_fm_node.rowid),
             )
+        mark_projection_dirty(conn, project_id=project_id)
         conn.commit()
         return source_node, to_fm_node
     except Exception:
@@ -1645,6 +1655,7 @@ def _delete_analysis_node_once(
             )
 
         conn.execute("DELETE FROM nodes WHERE rowid = ?", (node.rowid,))
+        mark_projection_dirty(conn, project_id=project_id)
         conn.commit()
         return node.type, node.id, node.rowid, affected_objects
     except Exception:

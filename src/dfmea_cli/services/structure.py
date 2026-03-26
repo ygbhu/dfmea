@@ -10,6 +10,7 @@ from typing import Any, cast
 import dfmea_cli.db as db_helpers
 from dfmea_cli.errors import CliError, DbBusyError
 from dfmea_cli.resolve import normalize_retry_policy, resolve_node_reference
+from dfmea_cli.services.projections import mark_projection_dirty
 
 
 STRUCTURE_TYPES = ("SYS", "SUB", "COMP")
@@ -277,6 +278,7 @@ def _add_structure_node_once(
                 suggested_action="Retry the command. If it persists, inspect SQLite insert behavior.",
             )
         rowid = cast(int, rowid)
+        mark_projection_dirty(conn, project_id=project_id)
         conn.commit()
         return node_id, rowid, None if parent is None else parent.id
     except Exception:
@@ -318,6 +320,7 @@ def _update_structure_node_once(
                 node.rowid,
             ),
         )
+        mark_projection_dirty(conn, project_id=project_id)
         conn.commit()
         return _node_identity(node), node.type, node.rowid
     except Exception:
@@ -351,6 +354,7 @@ def _move_structure_node_once(
             "UPDATE nodes SET parent_id = ?, updated = ? WHERE rowid = ?",
             (0 if parent is None else parent.rowid, _utc_now(), node.rowid),
         )
+        mark_projection_dirty(conn, project_id=project_id)
         conn.commit()
         return (
             _node_identity(node),
@@ -394,6 +398,7 @@ def _delete_structure_node_once(
                 suggested_action="Delete or move child nodes first.",
             )
         conn.execute("DELETE FROM nodes WHERE rowid = ?", (node.rowid,))
+        mark_projection_dirty(conn, project_id=project_id)
         conn.commit()
         return _node_identity(node), node.type, node.rowid
     except Exception:

@@ -9,6 +9,7 @@ from typing import Any
 import dfmea_cli.db as db_helpers
 from dfmea_cli.errors import CliError, DbBusyError
 from dfmea_cli.resolve import normalize_retry_policy
+from dfmea_cli.services.projections import load_projection
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,6 +27,7 @@ def export_markdown(
     db_path: str | Path,
     project_id: str,
     out_dir: str | Path,
+    layout: str,
     busy_timeout_ms: int,
     retry: int,
 ) -> ExportMarkdownResult:
@@ -42,6 +44,7 @@ def export_markdown(
                 db_path=resolved_db_path,
                 project_id=project_id,
                 out_dir=resolved_out_dir,
+                layout=layout,
                 busy_timeout_ms=retry_policy.busy_timeout_ms,
             ),
             retry=retry_policy.retry,
@@ -70,8 +73,17 @@ def _export_markdown_once(
     db_path: Path,
     project_id: str,
     out_dir: Path,
+    layout: str,
     busy_timeout_ms: int,
 ) -> list[dict[str, Any]]:
+    if layout not in {"ledger", "review"}:
+        raise CliError(
+            code="INVALID_REFERENCE",
+            message=f"Unsupported export layout '{layout}'.",
+            target={"layout": layout},
+            suggested_action="Use --layout ledger or --layout review.",
+        )
+
     conn = db_helpers.connect(db_path, busy_timeout_ms=busy_timeout_ms)
     conn.row_factory = sqlite3.Row
     try:
@@ -120,6 +132,14 @@ def _export_markdown_once(
             suggested_action="Ensure the output directory is writable and retry export.",
         ) from exc
 
+    if layout == "review":
+        return _export_review_markdown(
+            db_path=db_path,
+            project_id=project_id,
+            out_dir=out_dir,
+            busy_timeout_ms=busy_timeout_ms,
+        )
+
     export_path = (out_dir / f"{project_id}.md").resolve()
     content = _render_project_markdown(
         project_id=project_row["id"],
@@ -137,6 +157,141 @@ def _export_markdown_once(
             "bytes": export_path.stat().st_size,
         }
     ]
+
+
+def _export_review_markdown(
+    *,
+    db_path: Path,
+    project_id: str,
+    out_dir: Path,
+    busy_timeout_ms: int,
+) -> list[dict[str, Any]]:
+    project_root = (out_dir / project_id).resolve()
+    components_dir = project_root / "components"
+    components_dir.mkdir(parents=True, exist_ok=True)
+
+    project_map = load_projection(
+        db_path=db_path,
+        project_id=project_id,
+        kind="project_map",
+        scope_ref="project",
+        busy_timeout_ms=busy_timeout_ms,
+        retry=0,
+    )
+
+    index_path = project_root / "index.md"
+    index_content = _render_review_index(
+        project_id=project_id, project_map=project_map.data
+    )
+    index_path.write_text(index_content, encoding="utf-8")
+
+    files = [
+        {
+            "path": str(index_path),
+            "kind": "review_index_markdown",
+            "bytes": index_path.stat().st_size,
+        }
+    ]
+
+    component_ids = [
+        item.get("id")
+        for item in project_map.data.get("structure", [])
+        if item.get("type") == "COMP" and item.get("id")
+    ]
+    if not component_ids:
+        component_ids = [
+            item.get("scope_ref")
+            for item in _list_projection_scope_refs(
+                db_path=db_path,
+                project_id=project_id,
+                kind="component_bundle",
+                busy_timeout_ms=busy_timeout_ms,
+            )
+        ]
+
+    for comp_id in component_ids:
+        if comp_id is None:
+            continue
+        bundle = load_projection(
+            db_path=db_path,
+            project_id=project_id,
+            kind="component_bundle",
+            scope_ref=comp_id,
+            busy_timeout_ms=busy_timeout_ms,
+            retry=0,
+        )
+        component_path = components_dir / f"{comp_id}.md"
+        component_path.write_text(
+            _render_component_bundle_markdown(bundle.data), encoding="utf-8"
+        )
+        files.append(
+            {
+                "path": str(component_path),
+                "kind": "component_review_markdown",
+                "bytes": component_path.stat().st_size,
+            }
+        )
+
+    return files
+
+
+def _list_projection_scope_refs(
+    *,
+    db_path: Path,
+    project_id: str,
+    kind: str,
+    busy_timeout_ms: int,
+) -> list[dict[str, Any]]:
+    conn = db_helpers.connect(db_path, busy_timeout_ms=busy_timeout_ms)
+    try:
+        rows = conn.execute(
+            "SELECT scope_ref FROM derived_views WHERE project_id = ? AND kind = ? ORDER BY scope_ref",
+            (project_id, kind),
+        ).fetchall()
+    finally:
+        conn.close()
+    return [{"scope_ref": row[0]} for row in rows]
+
+
+def _render_review_index(*, project_id: str, project_map: dict[str, Any]) -> str:
+    counts = project_map.get("counts", {})
+    lines = [
+        f"# DFMEA Review Export: {project_id}",
+        "",
+        f"- project_id: `{project_id}`",
+        f"- functions: {counts.get('functions', 0)}",
+        f"- failure_modes: {counts.get('failure_modes', 0)}",
+        f"- open_actions: {counts.get('open_actions', 0)}",
+        "",
+        "## Component Reviews",
+        "",
+    ]
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _render_component_bundle_markdown(bundle: dict[str, Any]) -> str:
+    component = bundle.get("component", {})
+    counts = bundle.get("counts", {})
+    lines = [
+        f"# Component Review: {component.get('id', 'unknown')}",
+        "",
+        f"- component_id: `{component.get('id', '')}`",
+        f"- component_rowid: {component.get('rowid', '')}",
+        f"- component_name: `{component.get('name', '')}`",
+        f"- functions: {counts.get('functions', 0)}",
+        f"- failure_modes: {counts.get('failure_modes', 0)}",
+        f"- actions: {counts.get('actions', 0)}",
+        "",
+        "## Functions",
+        "",
+    ]
+    for fn in bundle.get("functions", []):
+        lines.append(
+            f"- `{fn.get('id')}` (rowid {fn.get('rowid')}) - {fn.get('name', '')}"
+        )
+    if not bundle.get("functions"):
+        lines.append("- none")
+    return "\n".join(lines).rstrip() + "\n"
 
 
 def _render_project_markdown(

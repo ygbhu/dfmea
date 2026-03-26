@@ -15,6 +15,7 @@ def test_root_help_lists_major_command_groups():
     assert result.exit_code == 0
     for name in [
         "init",
+        "projection",
         "structure",
         "analysis",
         "query",

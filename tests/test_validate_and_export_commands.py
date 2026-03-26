@@ -155,6 +155,87 @@ def test_validate_returns_zero_for_clean_db(cli_runner, tmp_path: Path):
     assert payload["errors"] == []
 
 
+def test_validate_reports_stale_projection_as_warning(cli_runner, tmp_path: Path):
+    seeded = _seed_analysis_db(cli_runner, tmp_path)
+
+    rebuild_result = cli_runner.invoke(
+        [
+            "projection",
+            "rebuild",
+            "--db",
+            str(seeded["db_path"]),
+            "--format",
+            "json",
+        ]
+    )
+    assert rebuild_result.exit_code == 0, rebuild_result.stdout
+
+    result = cli_runner.invoke(
+        [
+            "structure",
+            "add",
+            "--db",
+            str(seeded["db_path"]),
+            "--type",
+            "SYS",
+            "--name",
+            "Extra",
+            "--format",
+            "json",
+        ]
+    )
+    assert result.exit_code == 0, result.stdout
+
+    validate_result = cli_runner.invoke(
+        ["validate", "--db", str(seeded["db_path"]), "--format", "json"]
+    )
+
+    payload = _payload(validate_result)
+    assert validate_result.exit_code == 0
+    assert payload["ok"] is True
+    assert any(
+        issue["scope"] == "projection" and issue["kind"] == "STALE_PROJECTION"
+        for issue in payload["data"]["issues"]
+    )
+
+
+def test_validate_reports_corrupted_projection_as_error(cli_runner, tmp_path: Path):
+    seeded = _seed_analysis_db(cli_runner, tmp_path)
+
+    rebuild_result = cli_runner.invoke(
+        [
+            "projection",
+            "rebuild",
+            "--db",
+            str(seeded["db_path"]),
+            "--format",
+            "json",
+        ]
+    )
+    assert rebuild_result.exit_code == 0, rebuild_result.stdout
+
+    conn = sqlite3.connect(seeded["db_path"])
+    try:
+        conn.execute(
+            "UPDATE derived_views SET data = ? WHERE project_id = ?", ("{", "demo")
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    validate_result = cli_runner.invoke(
+        ["validate", "--db", str(seeded["db_path"]), "--format", "json"]
+    )
+
+    payload = _payload(validate_result)
+    assert validate_result.exit_code != 0
+    assert payload["ok"] is False
+    assert any(
+        issue["scope"] == "projection" and issue["kind"] == "PROJECTION_CORRUPT"
+        for issue in payload["data"]["issues"]
+    )
+
+
 def test_export_markdown_creates_files_with_traceable_ids(cli_runner, tmp_path: Path):
     seeded = _seed_analysis_db(cli_runner, tmp_path)
     out_dir = tmp_path / "exports"
@@ -186,3 +267,55 @@ def test_export_markdown_creates_files_with_traceable_ids(cli_runner, tmp_path: 
     content = exported_paths[0].read_text(encoding="utf-8")
     assert seeded["fn_id"] in content
     assert f"rowid {seeded['fn_rowid']}" in content
+
+
+def test_export_markdown_review_layout_creates_index_and_component_files(
+    cli_runner, tmp_path: Path
+):
+    seeded = _seed_analysis_db(cli_runner, tmp_path)
+    rebuild_result = cli_runner.invoke(
+        [
+            "projection",
+            "rebuild",
+            "--db",
+            str(seeded["db_path"]),
+            "--format",
+            "json",
+        ]
+    )
+    assert rebuild_result.exit_code == 0, rebuild_result.stdout
+
+    out_dir = tmp_path / "review-exports"
+    result = cli_runner.invoke(
+        [
+            "export",
+            "markdown",
+            "--db",
+            str(seeded["db_path"]),
+            "--out",
+            str(out_dir),
+            "--layout",
+            "review",
+            "--format",
+            "json",
+        ]
+    )
+
+    payload = _payload(result)
+    assert result.exit_code == 0
+    assert payload["ok"] is True
+    assert payload["data"]["files"]
+
+    exported_paths = [Path(item["path"]) for item in payload["data"]["files"]]
+    assert any(path.name == "index.md" for path in exported_paths)
+    assert any(path.parent.name == "components" for path in exported_paths)
+
+    index_path = next(path for path in exported_paths if path.name == "index.md")
+    component_path = next(
+        path for path in exported_paths if path.parent.name == "components"
+    )
+    index_content = index_path.read_text(encoding="utf-8")
+    component_content = component_path.read_text(encoding="utf-8")
+
+    assert "demo" in index_content
+    assert "COMP-001" in component_content

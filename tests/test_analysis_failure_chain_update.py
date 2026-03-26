@@ -132,6 +132,18 @@ def _affected_rowid(payload: dict, node_type: str, *, ordinal: int = 1) -> int:
     return matches[ordinal - 1]
 
 
+def _project_data(db_path: Path) -> dict:
+    conn = sqlite3.connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT data FROM projects WHERE id = ?", ("demo",)
+        ).fetchone()
+    finally:
+        conn.close()
+    assert row is not None
+    return json.loads(row[0])
+
+
 def test_update_action_status_returns_completed(cli_runner, tmp_path: Path):
     db_path = _create_function_db(cli_runner, tmp_path)
     _add_failure_chain(
@@ -203,6 +215,8 @@ def test_update_action_status_returns_completed(cli_runner, tmp_path: Path):
         "Add screening",
         '{"due": "2026-06-15", "kind": "detection", "owner": "Chen", "status": "completed", "target_causes": [6]}',
     )
+    assert _project_data(db_path)["canonical_revision"] == 6
+    assert _project_data(db_path)["projection_dirty"] is True
 
 
 def test_update_fm_updates_description_and_severity(cli_runner, tmp_path: Path):
