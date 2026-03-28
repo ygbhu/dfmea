@@ -606,6 +606,15 @@ def _validate_projection_state(
             )
             continue
 
+        issues.extend(
+            _validate_projection_payload_shape(
+                project_id=project_id,
+                kind=str(row["kind"]),
+                scope_ref=str(row["scope_ref"]),
+                payload=decoded,
+            )
+        )
+
         if (
             row["kind"] == "component_bundle"
             and str(row["scope_ref"]) not in valid_component_ids
@@ -642,6 +651,50 @@ def _validate_projection_state(
                     suggested_action="Delete the orphan projection row or run `dfmea projection rebuild`.",
                 )
             )
+
+    return issues
+
+
+def _validate_projection_payload_shape(
+    *,
+    project_id: str,
+    kind: str,
+    scope_ref: str,
+    payload: dict[str, Any],
+) -> list[dict[str, Any]]:
+    issues: list[dict[str, Any]] = []
+
+    required_fields_by_kind = {
+        "project_map": ["project", "counts", "structure", "risk_summary"],
+        "component_bundle": ["component", "counts", "functions"],
+        "function_dossier": [
+            "function",
+            "requirements",
+            "characteristics",
+            "failure_modes",
+        ],
+    }
+    required_fields = required_fields_by_kind.get(kind)
+    if required_fields is None:
+        return issues
+
+    missing = [field for field in required_fields if field not in payload]
+    if missing:
+        issues.append(
+            _issue(
+                level="error",
+                scope="projection",
+                kind="PROJECTION_SCHEMA_INVALID",
+                target={
+                    "project_id": project_id,
+                    "kind": kind,
+                    "scope_ref": scope_ref,
+                    "missing_fields": missing,
+                },
+                reason="Projection payload is missing required root fields.",
+                suggested_action="Run `dfmea projection rebuild` or repair the derived payload shape.",
+            )
+        )
 
     return issues
 

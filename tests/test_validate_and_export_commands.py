@@ -708,3 +708,135 @@ def test_validate_reports_projection_row_revision_mismatch(cli_runner, tmp_path:
         and issue["target"].get("kind") == "component_bundle"
         for issue in payload["data"]["issues"]
     )
+
+
+def test_validate_reports_project_map_shape_error(cli_runner, tmp_path: Path):
+    seeded = _seed_analysis_db(cli_runner, tmp_path)
+
+    rebuild_result = cli_runner.invoke(
+        [
+            "projection",
+            "rebuild",
+            "--db",
+            str(seeded["db_path"]),
+            "--format",
+            "json",
+        ]
+    )
+    assert rebuild_result.exit_code == 0, rebuild_result.stdout
+
+    conn = sqlite3.connect(seeded["db_path"])
+    try:
+        conn.execute(
+            "UPDATE derived_views SET data = ? WHERE project_id = ? AND kind = ? AND scope_ref = ?",
+            (
+                json.dumps({"project": {"id": "demo"}}, sort_keys=True),
+                "demo",
+                "project_map",
+                "project",
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    validate_result = cli_runner.invoke(
+        ["validate", "--db", str(seeded["db_path"]), "--format", "json"]
+    )
+
+    payload = _payload(validate_result)
+    assert validate_result.exit_code != 0
+    assert any(
+        issue["scope"] == "projection"
+        and issue["kind"] == "PROJECTION_SCHEMA_INVALID"
+        and issue["target"].get("kind") == "project_map"
+        for issue in payload["data"]["issues"]
+    )
+
+
+def test_validate_reports_component_bundle_shape_error(cli_runner, tmp_path: Path):
+    seeded = _seed_analysis_db(cli_runner, tmp_path)
+
+    rebuild_result = cli_runner.invoke(
+        [
+            "projection",
+            "rebuild",
+            "--db",
+            str(seeded["db_path"]),
+            "--format",
+            "json",
+        ]
+    )
+    assert rebuild_result.exit_code == 0, rebuild_result.stdout
+
+    conn = sqlite3.connect(seeded["db_path"])
+    try:
+        conn.execute(
+            "UPDATE derived_views SET data = ? WHERE project_id = ? AND kind = ? AND scope_ref = ?",
+            (
+                json.dumps({"component": {"id": seeded["comp_id"]}}, sort_keys=True),
+                "demo",
+                "component_bundle",
+                seeded["comp_id"],
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    validate_result = cli_runner.invoke(
+        ["validate", "--db", str(seeded["db_path"]), "--format", "json"]
+    )
+
+    payload = _payload(validate_result)
+    assert validate_result.exit_code != 0
+    assert any(
+        issue["scope"] == "projection"
+        and issue["kind"] == "PROJECTION_SCHEMA_INVALID"
+        and issue["target"].get("kind") == "component_bundle"
+        for issue in payload["data"]["issues"]
+    )
+
+
+def test_validate_reports_function_dossier_shape_error(cli_runner, tmp_path: Path):
+    seeded = _seed_analysis_db(cli_runner, tmp_path)
+
+    rebuild_result = cli_runner.invoke(
+        [
+            "projection",
+            "rebuild",
+            "--db",
+            str(seeded["db_path"]),
+            "--format",
+            "json",
+        ]
+    )
+    assert rebuild_result.exit_code == 0, rebuild_result.stdout
+
+    conn = sqlite3.connect(seeded["db_path"])
+    try:
+        conn.execute(
+            "UPDATE derived_views SET data = ? WHERE project_id = ? AND kind = ? AND scope_ref = ?",
+            (
+                json.dumps({"function": {"id": seeded["fn_id"]}}, sort_keys=True),
+                "demo",
+                "function_dossier",
+                seeded["fn_id"],
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    validate_result = cli_runner.invoke(
+        ["validate", "--db", str(seeded["db_path"]), "--format", "json"]
+    )
+
+    payload = _payload(validate_result)
+    assert validate_result.exit_code != 0
+    assert any(
+        issue["scope"] == "projection"
+        and issue["kind"] == "PROJECTION_SCHEMA_INVALID"
+        and issue["target"].get("kind") == "function_dossier"
+        for issue in payload["data"]["issues"]
+    )
