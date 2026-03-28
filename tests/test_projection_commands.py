@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from pathlib import Path
 
@@ -50,6 +51,84 @@ def _table_names(db_path: Path) -> set[str]:
     finally:
         conn.close()
     return {row[0] for row in rows}
+
+
+def _seed_projection_query_db(cli_runner, tmp_path: Path) -> tuple[Path, str]:
+    db_path = _init_db(cli_runner, tmp_path)
+
+    sys_result = cli_runner.invoke(
+        [
+            "structure",
+            "add",
+            "--db",
+            str(db_path),
+            "--type",
+            "SYS",
+            "--name",
+            "Drive",
+            "--format",
+            "json",
+        ]
+    )
+    assert sys_result.exit_code == 0, sys_result.stdout
+    sys_id = _payload(sys_result)["data"]["node_id"]
+
+    sub_result = cli_runner.invoke(
+        [
+            "structure",
+            "add",
+            "--db",
+            str(db_path),
+            "--type",
+            "SUB",
+            "--name",
+            "Inverter",
+            "--parent",
+            sys_id,
+            "--format",
+            "json",
+        ]
+    )
+    assert sub_result.exit_code == 0, sub_result.stdout
+    sub_id = _payload(sub_result)["data"]["node_id"]
+
+    comp_result = cli_runner.invoke(
+        [
+            "structure",
+            "add",
+            "--db",
+            str(db_path),
+            "--type",
+            "COMP",
+            "--name",
+            "Stator",
+            "--parent",
+            sub_id,
+            "--format",
+            "json",
+        ]
+    )
+    assert comp_result.exit_code == 0, comp_result.stdout
+    comp_id = _payload(comp_result)["data"]["node_id"]
+
+    fn_result = cli_runner.invoke(
+        [
+            "analysis",
+            "add-function",
+            "--db",
+            str(db_path),
+            "--comp",
+            comp_id,
+            "--name",
+            "Deliver torque",
+            "--description",
+            "Provide rated torque",
+            "--format",
+            "json",
+        ]
+    )
+    assert fn_result.exit_code == 0, fn_result.stdout
+    return db_path, comp_id
 
 
 def test_projection_status_returns_projection_metadata_for_clean_project(
@@ -182,3 +261,28 @@ def test_projection_rebuild_persists_derived_views_and_clears_dirty_flag(
     finally:
         conn.close()
     assert row_count == 3
+
+
+def test_projection_auto_rebuild_releases_db_file_handle(cli_runner, tmp_path: Path):
+    db_path, comp_id = _seed_projection_query_db(cli_runner, tmp_path)
+
+    result = cli_runner.invoke(
+        [
+            "query",
+            "summary",
+            "--db",
+            str(db_path),
+            "--comp",
+            comp_id,
+            "--format",
+            "json",
+        ]
+    )
+
+    payload = _payload(result)
+    assert result.exit_code == 0, result.stdout
+    assert payload["meta"]["projection"]["status"] == "rebuilt"
+
+    renamed_path = db_path.with_name("projection-renamed.db")
+    os.replace(db_path, renamed_path)
+    assert renamed_path.exists()

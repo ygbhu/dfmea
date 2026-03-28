@@ -515,3 +515,91 @@ def test_validate_reports_missing_projection_as_warning(cli_runner, tmp_path: Pa
         issue["scope"] == "projection" and issue["kind"] == "MISSING_PROJECTION"
         for issue in payload["data"]["issues"]
     )
+
+
+def test_validate_reports_projection_schema_version_mismatch(
+    cli_runner, tmp_path: Path
+):
+    seeded = _seed_analysis_db(cli_runner, tmp_path)
+
+    rebuild_result = cli_runner.invoke(
+        [
+            "projection",
+            "rebuild",
+            "--db",
+            str(seeded["db_path"]),
+            "--format",
+            "json",
+        ]
+    )
+    assert rebuild_result.exit_code == 0, rebuild_result.stdout
+
+    conn = sqlite3.connect(seeded["db_path"])
+    try:
+        row = conn.execute(
+            "SELECT data FROM projects WHERE id = ?", ("demo",)
+        ).fetchone()
+        project_data = json.loads(row[0])
+        project_data["projection_schema_version"] = "0.9"
+        conn.execute(
+            "UPDATE projects SET data = ? WHERE id = ?",
+            (json.dumps(project_data, sort_keys=True), "demo"),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    validate_result = cli_runner.invoke(
+        ["validate", "--db", str(seeded["db_path"]), "--format", "json"]
+    )
+
+    payload = _payload(validate_result)
+    assert validate_result.exit_code != 0
+    assert any(
+        issue["scope"] == "projection" and issue["kind"] == "PROJECTION_SCHEMA_MISMATCH"
+        for issue in payload["data"]["issues"]
+    )
+
+
+def test_validate_reports_orphan_projection_as_error(cli_runner, tmp_path: Path):
+    seeded = _seed_analysis_db(cli_runner, tmp_path)
+
+    rebuild_result = cli_runner.invoke(
+        [
+            "projection",
+            "rebuild",
+            "--db",
+            str(seeded["db_path"]),
+            "--format",
+            "json",
+        ]
+    )
+    assert rebuild_result.exit_code == 0, rebuild_result.stdout
+
+    conn = sqlite3.connect(seeded["db_path"])
+    try:
+        conn.execute(
+            "INSERT OR REPLACE INTO derived_views (project_id, kind, scope_ref, canonical_revision, built_at, data) VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                "demo",
+                "component_bundle",
+                "COMP-999",
+                8,
+                "2026-03-25T00:00:00+00:00",
+                json.dumps({"component": {"id": "COMP-999"}}, sort_keys=True),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    validate_result = cli_runner.invoke(
+        ["validate", "--db", str(seeded["db_path"]), "--format", "json"]
+    )
+
+    payload = _payload(validate_result)
+    assert validate_result.exit_code != 0
+    assert any(
+        issue["scope"] == "projection" and issue["kind"] == "PROJECTION_UNTRACEABLE"
+        for issue in payload["data"]["issues"]
+    )

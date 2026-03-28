@@ -10,6 +10,7 @@ from typing import Any
 import dfmea_cli.db as db_helpers
 from dfmea_cli.errors import CliError, DbBusyError
 from dfmea_cli.resolve import normalize_retry_policy
+from dfmea_cli.services.projections import PROJECTION_SCHEMA_VERSION
 
 
 REQUIRED_TABLES = ("projects", "nodes", "fm_links", "derived_views")
@@ -438,6 +439,25 @@ def _validate_projection_state(
     canonical_revision = int(project_data.get("canonical_revision", 0))
     last_projection_revision = int(project_data.get("last_projection_revision", 0))
     projection_dirty = bool(project_data.get("projection_dirty", False))
+    projection_schema_version = str(
+        project_data.get("projection_schema_version", PROJECTION_SCHEMA_VERSION)
+    )
+
+    if projection_schema_version != PROJECTION_SCHEMA_VERSION:
+        issues.append(
+            _issue(
+                level="error",
+                scope="projection",
+                kind="PROJECTION_SCHEMA_MISMATCH",
+                target={
+                    "project_id": project_id,
+                    "projection_schema_version": projection_schema_version,
+                    "expected": PROJECTION_SCHEMA_VERSION,
+                },
+                reason="Projection schema version does not match the runtime expectation.",
+                suggested_action="Run `dfmea projection rebuild` after repairing projection metadata.",
+            )
+        )
 
     if projection_dirty or last_projection_revision != canonical_revision:
         issues.append(
@@ -484,6 +504,8 @@ def _validate_projection_state(
     expected_keys.update(
         (("function_dossier", str(row["id"])) for row in fn_rows if row["id"])
     )
+    valid_component_ids = {str(row["id"]) for row in comp_rows if row["id"]}
+    valid_function_ids = {str(row["id"]) for row in fn_rows if row["id"]}
     for kind, scope_ref in sorted(expected_keys - available_keys):
         issues.append(
             _issue(
@@ -529,6 +551,44 @@ def _validate_projection_state(
                     },
                     reason="Projection data must decode to a JSON object.",
                     suggested_action="Run `dfmea projection rebuild` to recreate the corrupted derived view.",
+                )
+            )
+            continue
+
+        if (
+            row["kind"] == "component_bundle"
+            and str(row["scope_ref"]) not in valid_component_ids
+        ):
+            issues.append(
+                _issue(
+                    level="error",
+                    scope="projection",
+                    kind="PROJECTION_UNTRACEABLE",
+                    target={
+                        "project_id": project_id,
+                        "kind": row["kind"],
+                        "scope_ref": row["scope_ref"],
+                    },
+                    reason="Projection row does not map back to an existing component.",
+                    suggested_action="Delete the orphan projection row or run `dfmea projection rebuild`.",
+                )
+            )
+        elif (
+            row["kind"] == "function_dossier"
+            and str(row["scope_ref"]) not in valid_function_ids
+        ):
+            issues.append(
+                _issue(
+                    level="error",
+                    scope="projection",
+                    kind="PROJECTION_UNTRACEABLE",
+                    target={
+                        "project_id": project_id,
+                        "kind": row["kind"],
+                        "scope_ref": row["scope_ref"],
+                    },
+                    reason="Projection row does not map back to an existing function.",
+                    suggested_action="Delete the orphan projection row or run `dfmea projection rebuild`.",
                 )
             )
 

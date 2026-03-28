@@ -144,11 +144,33 @@ def query_summary(
     busy_timeout_ms: int,
     retry: int,
 ) -> QueryResult:
+    def action(conn: sqlite3.Connection) -> str:
+        component = resolve_node_reference(
+            conn, project_id=project_id, node_ref=comp_ref
+        )
+        _ensure_node_type(component.type, expected_type="COMP", node_ref=comp_ref)
+        if component.id is None:
+            raise CliError(
+                code="INVALID_REFERENCE",
+                message=f"Component '{comp_ref}' does not expose a stable business id.",
+                target={"node": comp_ref, "project_id": project_id},
+                suggested_action="Use a component business id for projection-backed queries.",
+            )
+        return component.id
+
+    resolved_comp_id = _run_query_operation(
+        db_path=db_path,
+        project_id=project_id,
+        busy_timeout_ms=busy_timeout_ms,
+        retry=retry,
+        action=action,
+    ).data
+
     projection = load_projection(
         db_path=db_path,
         project_id=project_id,
         kind="component_bundle",
-        scope_ref=comp_ref,
+        scope_ref=resolved_comp_id,
         busy_timeout_ms=busy_timeout_ms,
         retry=retry,
     )
@@ -222,11 +244,33 @@ def query_dossier(
     busy_timeout_ms: int,
     retry: int,
 ) -> QueryResult:
+    def action(conn: sqlite3.Connection) -> str:
+        function_node = resolve_node_reference(
+            conn, project_id=project_id, node_ref=fn_ref
+        )
+        _ensure_node_type(function_node.type, expected_type="FN", node_ref=fn_ref)
+        if function_node.id is None:
+            raise CliError(
+                code="INVALID_REFERENCE",
+                message=f"Function '{fn_ref}' does not expose a stable business id.",
+                target={"node": fn_ref, "project_id": project_id},
+                suggested_action="Use a function business id for projection-backed queries.",
+            )
+        return function_node.id
+
+    resolved_fn_id = _run_query_operation(
+        db_path=db_path,
+        project_id=project_id,
+        busy_timeout_ms=busy_timeout_ms,
+        retry=retry,
+        action=action,
+    ).data
+
     projection = load_projection(
         db_path=db_path,
         project_id=project_id,
         kind="function_dossier",
-        scope_ref=fn_ref,
+        scope_ref=resolved_fn_id,
         busy_timeout_ms=busy_timeout_ms,
         retry=retry,
     )

@@ -371,6 +371,7 @@ def _build_project_map(
     project_name: str,
     node_rows: list[sqlite3.Row],
 ) -> dict[str, Any]:
+    structured = _structured_nodes(node_rows=node_rows, project_id=project_id)
     counts_by_type = {
         "SYS": 0,
         "SUB": 0,
@@ -379,10 +380,48 @@ def _build_project_map(
         "FM": 0,
         "ACT": 0,
     }
+    ap_summary = {"High": 0, "Medium": 0, "Low": 0}
+    severity_gte_7 = 0
+    open_actions = 0
     for row in node_rows:
         node_type = row["type"]
         if node_type in counts_by_type:
             counts_by_type[node_type] += 1
+    for node in structured:
+        if node["type"] == "FC":
+            ap = node.get("data", {}).get("ap")
+            if ap in ap_summary:
+                ap_summary[str(ap)] += 1
+        elif node["type"] == "FM":
+            severity = node.get("data", {}).get("severity")
+            if isinstance(severity, int) and severity >= 7:
+                severity_gte_7 += 1
+        elif node["type"] == "ACT":
+            if node.get("data", {}).get("status") != "completed":
+                open_actions += 1
+
+    node_by_rowid = {node["rowid"]: node for node in structured}
+
+    def build_tree(node: dict[str, Any]) -> dict[str, Any]:
+        children = [
+            build_tree(child)
+            for child in structured
+            if (child.get("parent") or {}).get("rowid") == node["rowid"]
+            and child["type"] in {"SYS", "SUB", "COMP"}
+        ]
+        return {
+            "id": node.get("id"),
+            "rowid": node.get("rowid"),
+            "type": node.get("type"),
+            "name": node.get("name"),
+            "children": children,
+        }
+
+    roots = [
+        build_tree(node)
+        for node in structured
+        if node["type"] == "SYS" and (node.get("parent") is None)
+    ]
 
     return {
         "project": {"id": project_id, "name": project_name},
@@ -392,10 +431,10 @@ def _build_project_map(
             "components": counts_by_type["COMP"],
             "functions": counts_by_type["FN"],
             "failure_modes": counts_by_type["FM"],
-            "open_actions": counts_by_type["ACT"],
+            "open_actions": open_actions,
         },
-        "structure": [],
-        "risk_summary": {"ap": {"High": 0, "Medium": 0, "Low": 0}, "severity_gte_7": 0},
+        "structure": roots,
+        "risk_summary": {"ap": ap_summary, "severity_gte_7": severity_gte_7},
     }
 
 
@@ -424,6 +463,7 @@ def _load_projection_once(
             or int(row["canonical_revision"]) != canonical_revision
         ):
             conn.rollback()
+            conn.close()
             _rebuild_projections_once(
                 db_path=db_path,
                 project_id=project_id,
