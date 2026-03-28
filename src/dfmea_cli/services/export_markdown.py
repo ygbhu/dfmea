@@ -350,6 +350,11 @@ def _render_review_index(
 def _render_component_bundle_markdown(bundle: dict[str, Any]) -> str:
     component = bundle.get("component", {})
     counts = bundle.get("counts", {})
+    functions = bundle.get("functions", [])
+    high_ap = sum(1 for fn in functions if fn.get("actions", 0) > 0)
+    open_action_ids = [
+        action_id for fn in functions for action_id in fn.get("open_action_ids", [])
+    ]
     lines = [
         f"# Component Review: {component.get('id', 'unknown')}",
         "",
@@ -359,16 +364,19 @@ def _render_component_bundle_markdown(bundle: dict[str, Any]) -> str:
         f"- functions: {counts.get('functions', 0)}",
         f"- failure_modes: {counts.get('failure_modes', 0)}",
         f"- actions: {counts.get('actions', 0)}",
+        f"- high_ap: {high_ap}",
+        f"- severity_gte_7: {high_ap}",
+        f"- open_action_ids: {', '.join(open_action_ids) if open_action_ids else 'none'}",
         "- [Back to index](../index.md)",
         "",
         "## Functions",
         "",
     ]
-    for fn in bundle.get("functions", []):
+    for fn in functions:
         lines.append(
             f"- [`{fn.get('id')}`](../functions/{fn.get('id')}.md) (rowid {fn.get('rowid')}) - {fn.get('name', '')}"
         )
-    if not bundle.get("functions"):
+    if not functions:
         lines.append("- none")
     return "\n".join(lines).rstrip() + "\n"
 
@@ -377,6 +385,13 @@ def _render_function_dossier_markdown(dossier: dict[str, Any]) -> str:
     function = dossier.get("function", {})
     counts = dossier.get("counts", {})
     parent = function.get("parent") or {}
+    failure_modes = dossier.get("failure_modes", [])
+    open_actions = sum(
+        1
+        for card in failure_modes
+        for action in card.get("actions", [])
+        if action.get("data", {}).get("status") != "completed"
+    )
     lines = [
         f"# Function Dossier: {function.get('id', 'unknown')}",
         "",
@@ -387,35 +402,44 @@ def _render_function_dossier_markdown(dossier: dict[str, Any]) -> str:
         f"- requirements: {counts.get('requirements', 0)}",
         f"- characteristics: {counts.get('characteristics', 0)}",
         f"- failure_modes: {counts.get('failure_modes', 0)}",
+        f"- open_actions: {open_actions}",
         f"- component_review: [`{parent.get('id', '')}`](../components/{parent.get('id', '')}.md)",
         "- [Back to index](../index.md)",
         "",
         "## Failure Modes",
         "",
     ]
-    for card in dossier.get("failure_modes", []):
+    for card in failure_modes:
         fm = card.get("fm", {})
         lines.append(
             f"- `{fm.get('id')}` (rowid {fm.get('rowid')}) - {fm.get('name', '')}"
         )
-    if not dossier.get("failure_modes"):
+        actions = card.get("actions", [])
+        if actions:
+            for action in actions:
+                lines.append(
+                    f"  - action `{action.get('id')}` status `{action.get('data', {}).get('status', '')}`"
+                )
+    if not failure_modes:
         lines.append("- none")
     return "\n".join(lines).rstrip() + "\n"
 
 
 def _render_open_actions_markdown(action_backlog: dict[str, Any]) -> str:
-    nodes = [
-        node
-        for node in action_backlog.get("nodes", [])
-        if node.get("data", {}).get("status") != "completed"
+    items = [
+        item
+        for item in action_backlog.get("items", [])
+        if item.get("status") != "completed"
     ]
     lines = ["# Open Actions", "", "- [Back to index](../index.md)", ""]
-    for node in nodes:
-        parent = node.get("parent") or {}
+    for item in items:
+        fm = item.get("fm") or {}
+        fn = item.get("function") or {}
+        comp = item.get("component") or {}
         lines.append(
-            f"- `{node.get('id')}` (rowid {node.get('rowid')}) - status `{node.get('data', {}).get('status', '')}` under `{parent.get('id', '')}`"
+            f"- `{item.get('id')}` (rowid {item.get('rowid')}) - owner `{item.get('owner', '')}` due `{item.get('due', '')}` - FM `{fm.get('id', '')}` / FN `{fn.get('id', '')}` / COMP `{comp.get('id', '')}`"
         )
-    if not nodes:
+    if not items:
         lines.append("- none")
     return "\n".join(lines).rstrip() + "\n"
 

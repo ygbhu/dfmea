@@ -528,6 +528,10 @@ def test_query_actions_returns_actions_by_status(cli_runner, tmp_path: Path):
     assert payload["data"]["nodes"][0]["type"] == "ACT"
     assert payload["data"]["nodes"][0]["id"] == seeded["act_planned_id"]
     assert payload["data"]["nodes"][0]["data"]["status"] == "planned"
+    assert payload["data"]["nodes"][0]["data"]["kind"] == "detection"
+    assert payload["data"]["nodes"][0]["data"]["target_causes"] == [
+        seeded["fc_high_rowid"]
+    ]
     assert payload["meta"]["projection"] == {
         "canonical_revision": 8,
         "kind": "action_backlog",

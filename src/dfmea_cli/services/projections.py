@@ -521,6 +521,7 @@ def _build_component_bundles(
             fm_to_fn[node["rowid"]] = int(parent["rowid"])
 
     action_counts_by_fn: dict[int, int] = {}
+    action_ids_by_fn: dict[int, list[str]] = {}
     for node in actions:
         parent = node.get("parent")
         if parent is None:
@@ -528,6 +529,8 @@ def _build_component_bundles(
         fn_rowid = fm_to_fn.get(int(parent["rowid"]))
         if fn_rowid is not None:
             action_counts_by_fn[fn_rowid] = action_counts_by_fn.get(fn_rowid, 0) + 1
+            if node.get("id"):
+                action_ids_by_fn.setdefault(fn_rowid, []).append(str(node["id"]))
 
     fe_counts_by_fm = _count_children_by_parent(failure_effects)
     fc_counts_by_fm = _count_children_by_parent(failure_causes)
@@ -558,6 +561,7 @@ def _build_component_bundles(
                 "characteristics": characteristics_by_fn.get(node["rowid"], 0),
                 "failure_modes": failure_modes_by_fn.get(node["rowid"], 0),
                 "actions": action_counts_by_fn.get(node["rowid"], 0),
+                "open_action_ids": action_ids_by_fn.get(node["rowid"], []),
             }
             for node in component_functions
         ]
@@ -601,8 +605,43 @@ def _build_action_backlog(
     *, project_id: str, node_rows: list[sqlite3.Row]
 ) -> dict[str, Any]:
     structured = _structured_nodes(node_rows=node_rows, project_id=project_id)
-    nodes = [node for node in structured if node["type"] == "ACT"]
-    return {"nodes": nodes}
+    node_by_rowid = {node["rowid"]: node for node in structured}
+    items = []
+    for node in structured:
+        if node["type"] != "ACT":
+            continue
+        fm = node.get("parent") or {}
+        fm_full = node_by_rowid.get(fm.get("rowid", -1), {})
+        fn = fm_full.get("parent") or {}
+        fn_full = node_by_rowid.get(fn.get("rowid", -1), {})
+        comp = fn_full.get("parent") or {}
+        items.append(
+            {
+                "id": node.get("id"),
+                "rowid": node.get("rowid"),
+                "description": node.get("name", ""),
+                "data": dict(node.get("data") or {}),
+                "status": node.get("data", {}).get("status"),
+                "owner": node.get("data", {}).get("owner"),
+                "due": node.get("data", {}).get("due"),
+                "fm": {
+                    "id": fm.get("id"),
+                    "rowid": fm.get("rowid"),
+                    "name": fm.get("name"),
+                },
+                "function": {
+                    "id": fn.get("id"),
+                    "rowid": fn.get("rowid"),
+                    "name": fn.get("name"),
+                },
+                "component": {
+                    "id": comp.get("id"),
+                    "rowid": comp.get("rowid"),
+                    "name": comp.get("name"),
+                },
+            }
+        )
+    return {"items": items}
 
 
 def _build_function_dossiers(

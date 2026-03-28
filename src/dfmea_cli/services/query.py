@@ -356,9 +356,17 @@ def query_actions(
         retry=retry,
     )
     matched = [
-        node
-        for node in projection.data["nodes"]
-        if node["data"].get("status") == status
+        {
+            "id": item.get("id"),
+            "rowid": item.get("rowid"),
+            "type": "ACT",
+            "project_id": project_id,
+            "name": item.get("description"),
+            "parent": item.get("fm"),
+            "data": dict(item.get("data") or {}),
+        }
+        for item in projection.data["items"]
+        if item.get("status") == status
     ]
     return QueryResult(
         db_path=Path(db_path),

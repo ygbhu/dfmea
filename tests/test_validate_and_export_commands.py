@@ -80,6 +80,61 @@ def _add_function(
     return _payload(result)
 
 
+def _add_requirement(
+    cli_runner, db_path: Path, *, fn: str, text: str, source: str
+) -> dict:
+    result = cli_runner.invoke(
+        [
+            "analysis",
+            "add-requirement",
+            "--db",
+            str(db_path),
+            "--fn",
+            fn,
+            "--text",
+            text,
+            "--source",
+            source,
+            "--format",
+            "json",
+        ]
+    )
+    assert result.exit_code == 0, result.stdout
+    return _payload(result)
+
+
+def _add_characteristic(
+    cli_runner, db_path: Path, *, fn: str, text: str, value: str, unit: str
+) -> dict:
+    result = cli_runner.invoke(
+        [
+            "analysis",
+            "add-characteristic",
+            "--db",
+            str(db_path),
+            "--fn",
+            fn,
+            "--text",
+            text,
+            "--value",
+            value,
+            "--unit",
+            unit,
+            "--format",
+            "json",
+        ]
+    )
+    assert result.exit_code == 0, result.stdout
+    return _payload(result)
+
+
+def _affected_object(payload: dict, node_type: str) -> dict:
+    for item in payload["data"]["affected_objects"]:
+        if item["type"] == node_type:
+            return item
+    raise AssertionError(f"Missing affected object for type {node_type}: {payload}")
+
+
 def _seed_analysis_db(cli_runner, tmp_path: Path) -> dict:
     db_path = _init_db(cli_runner, tmp_path)
     sys_payload = _add_structure(cli_runner, db_path, node_type="SYS", name="Drive")
@@ -104,11 +159,72 @@ def _seed_analysis_db(cli_runner, tmp_path: Path) -> dict:
         name="Deliver torque",
         description="Provide rated torque",
     )
+    req_payload = _add_requirement(
+        cli_runner,
+        db_path,
+        fn=fn_payload["data"]["fn_id"],
+        text="Meet 300 Nm output",
+        source="SYS-REQ-1",
+    )
+    char_payload = _add_characteristic(
+        cli_runner,
+        db_path,
+        fn=fn_payload["data"]["fn_id"],
+        text="Torque output",
+        value="300",
+        unit="Nm",
+    )
+    chain_result = cli_runner.invoke(
+        [
+            "analysis",
+            "add-failure-chain",
+            "--db",
+            str(db_path),
+            "--fn",
+            fn_payload["data"]["fn_id"],
+            "--fm-description",
+            "Torque output too low",
+            "--severity",
+            "8",
+            "--violates-req",
+            str(req_payload["data"]["req_rowid"]),
+            "--related-char",
+            str(char_payload["data"]["char_rowid"]),
+            "--fc-description",
+            "Winding short",
+            "--occurrence",
+            "4",
+            "--detection",
+            "3",
+            "--ap",
+            "High",
+            "--act-description",
+            "Add screening",
+            "--kind",
+            "detection",
+            "--status",
+            "planned",
+            "--owner",
+            "Chen",
+            "--due",
+            "2026-06-15",
+            "--target-causes",
+            "1",
+            "--format",
+            "json",
+        ]
+    )
+    assert chain_result.exit_code == 0, chain_result.stdout
+    chain_payload = _payload(chain_result)
     return {
         "comp_id": comp_payload["data"]["node_id"],
         "db_path": db_path,
         "fn_id": fn_payload["data"]["fn_id"],
         "fn_rowid": fn_payload["data"]["affected_objects"][0]["rowid"],
+        "fm_id": chain_payload["data"]["fm_id"],
+        "act_id": _affected_object(chain_payload, "ACT")["id"],
+        "act_owner": "Chen",
+        "act_due": "2026-06-15",
     }
 
 
@@ -352,6 +468,16 @@ def test_export_markdown_review_layout_creates_index_and_component_files(
     assert "[Back to index](../index.md)" in function_content
     assert "[Back to index](../index.md)" in actions_content
     assert "# Open Actions" in actions_content
+    assert seeded["act_owner"] in actions_content
+    assert seeded["act_due"] in actions_content
+    assert seeded["act_id"] in actions_content
+    assert seeded["fm_id"] in actions_content or seeded["fn_id"] in actions_content
+    assert "- high_ap: 1" in component_content
+    assert "- severity_gte_7: 1" in component_content
+    assert f"- open_action_ids: {seeded['act_id']}" in component_content
+    assert "- open_actions: 1" in function_content
+    assert "Torque output too low" in function_content
+    assert seeded["act_id"] in function_content
 
 
 def test_validate_reports_missing_projection_as_warning(cli_runner, tmp_path: Path):
