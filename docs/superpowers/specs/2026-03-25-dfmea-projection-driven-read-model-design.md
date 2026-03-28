@@ -9,6 +9,20 @@
 
 本文不是对现有架构的推翻，而是对读侧能力的增强设计。
 
+## 1.1 落地状态说明
+
+截至 2026-03-28，本文描述的中度重构路线已在当前仓库中部分完成，且已经不再只是设计草案：
+
+- `derived_views`、projection metadata、`projection status/rebuild` 已落地
+- projection-backed 查询已覆盖 `summary/by-ap/by-severity/actions/map/bundle/dossier`
+- `--layout review` 导出已落地，并能生成 index/component/function/actions 四类 review 页面
+- `projection` 范畴的 validate 已落地到基础可用水平
+
+因此，本文后续章节中的“建议”有两种状态：
+
+- 已成为现有代码基线的一部分
+- 仍作为后续强化项保留
+
 ## 2. 为什么要做这次增强
 
 当前仓库已经具备清晰的 CLI-first 基线：
@@ -322,6 +336,13 @@ CREATE INDEX IF NOT EXISTS idx_derived_views_kind
 }
 ```
 
+实现状态补充：
+
+- `project_map`、`component_bundle`、`function_dossier`、`risk_register`、`action_backlog` 均已在代码中实现
+- 其中 `project_map` 已支持真实结构树与基础风险摘要
+- `action_backlog` 已带出 `owner/due` 及 `FM/FN/COMP` 上下文
+- 仍未完全收口的是各 projection payload 的字段级 schema 约束与更严格的语义校验
+
 ## 11. 查询与命令设计
 
 ### 11.1 保持 canonical 直读的命令
@@ -407,6 +428,13 @@ dfmea
 3. 对人工维护场景：
    - 允许显式运行 `dfmea projection rebuild`
 
+实现状态补充：
+
+- 当前代码已经实现自动重建
+- 查询结果会通过 `meta.projection.status` 返回 `fresh` 或 `rebuilt`
+- auto rebuild 的连接泄漏问题已在后续实现中修复
+- 极端并发 freshness race 仍属于后续强化点
+
 ## 12. 导出设计
 
 ### 12.1 设计原则
@@ -476,6 +504,12 @@ dfmea
 3. 所有投影里的 `id` / `rowid` 是否能回源到 canonical 节点
 4. `canonical_revision` 是否匹配项目当前修订号
 5. `projection_schema_version` 是否匹配当前运行时版本
+
+实现状态补充：
+
+- 当前已实现 `STALE_PROJECTION`、`MISSING_PROJECTION`、`PROJECTION_CORRUPT`、`PROJECTION_UNTRACEABLE`、`PROJECTION_SCHEMA_MISMATCH`、`PROJECTION_METADATA_INVALID`
+- 当前已覆盖 metadata 形状错误、metadata revision 类型错误、孤儿 projection、单条 projection revision 漂移
+- 尚未完全实现的是“按 projection kind 做字段级 payload schema 校验”
 
 ## 14. 并发与事务语义
 
@@ -664,3 +698,24 @@ start read snapshot -> load canonical graph -> build projection payloads -> repl
 - 稳定身份驱动的逐层深入
 
 同时没有把 PageIndex 在非结构化文档场景中的 best-effort 特性带入 DFMEA 真相层。
+
+## 21. 当前已实现范围与后续强化项
+
+### 已实现范围
+
+- projection schema / metadata / legacy upgrade path
+- projection 管理命令
+- projection-backed 查询主路径
+- review 导出主路径
+- projection validate 基础规则
+
+### 已验证范围
+
+- CLI 测试已覆盖 init / projection / query / validate / export 的主要 happy path 与关键回归场景
+- 当前完整测试集已达到 `122 passed`
+
+### 后续强化项
+
+- projection payload 的严格 schema/type 校验
+- review 导出统计语义的进一步收紧
+- 并发 freshness 的更强验证

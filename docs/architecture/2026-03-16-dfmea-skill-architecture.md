@@ -6,6 +6,8 @@
 >
 > 说明：本文档只定义架构，不包含实施排期、任务拆分或上线步骤。
 
+> 实现状态更新（2026-03-28）：projection/read-model 主干已落地到当前仓库，包括 `derived_views`、`dfmea projection status/rebuild`、projection-backed `query summary/by-ap/by-severity/actions/map/bundle/dossier`、`--layout review` 导出，以及 `projection` 范畴的基础校验。本文档中的 projection 架构不再只是计划态，而是当前代码基线的一部分；但其中部分统计语义与 payload 严格校验仍在持续收口。
+
 ---
 
 ## 1. 架构目标与边界
@@ -679,6 +681,13 @@ V1 的正式 projection 至少包括：
 - projection 来源和 freshness 信息优先补充到 `meta.projection`
 - 若 projection 缺失或过期，命令可先自动重建再返回，但必须在 `meta.projection.status` 中显式说明
 
+当前实现状态：
+
+- 已落地并由测试覆盖的 projection-backed 查询包括 `summary`、`by-ap`、`by-severity`、`actions`、`map`、`bundle`、`dossier`
+- `summary` / `bundle` / `dossier` 当前既接受业务 ID，也接受 rowid 输入，然后统一解析为稳定业务 ID 后读取 projection
+- projection 缺失、dirty、或修订号漂移时，查询路径会自动 rebuild，并通过 `meta.projection.status` 返回 `rebuilt`
+- 当前仍未完全收口的点是：各 projection payload 的严格 shape 校验、以及极端并发下的 freshness race 证明
+
 ### 9.3 SQL 作为底层支撑而非对外契约
 
 canonical 查询和递归追溯仍然由 SQL 支撑。下面的 SQL 片段描述的是内部实现能力和诊断能力，不是 Agent 的标准使用契约。
@@ -748,6 +757,12 @@ SELECT * FROM cause_chain;
 - 返回项仍能追溯到业务 ID 或 rowid
 - 若命令使用了 projection，应在 `meta.projection` 中说明来源、作用域、freshness 和构建修订号
 
+当前实现说明：
+
+- 这些要求已经在现有 `query` 命令成功结果中落地
+- `meta.projection` 当前至少包含 `kind`、`scope_ref`、`canonical_revision`、`status`
+- 相关契约已通过 CLI 测试覆盖，但 payload 的“字段级 schema 保证”仍在持续补强
+
 校验输出至少包含：
 
 - `level`
@@ -759,6 +774,7 @@ SELECT * FROM cause_chain;
 若为 projection 问题，还应能标识：
 
 - `scope = projection`
+- `kind` / `scope_ref`（若适用）
 - 受影响的 `kind`
 - 受影响的 `scope_ref`
 
@@ -768,6 +784,35 @@ SELECT * FROM cause_chain;
 - 记录可追溯到业务 ID 或 rowid
 - 即使按表格导出，也应能映射回源对象
 - `review` 布局应优先消费 projection，而不是重复拼装另一套读模型逻辑
+
+当前实现说明：
+
+- `export markdown --layout review` 已落地，当前可生成 `index.md`、`components/*.md`、`functions/*.md`、`actions/open.md`
+- review 导出已具备基础导航、traceable id/rowid、open actions 页面和 function dossier 页面
+- 但 review 页面中的部分统计口径仍应视为“轻量摘要”，不是最终审计级风险报表
+
+## 11. 当前实现状态与剩余风险
+
+截至 2026-03-28，projection/read-model 相关能力的实现状态如下：
+
+- 已实现
+  - `derived_views` schema 与 projection metadata
+  - `projection status` / `projection rebuild`
+  - 写后 `canonical_revision` 推进与 `projection_dirty` 标记
+  - projection-backed `query summary/by-ap/by-severity/actions/map/bundle/dossier`
+  - `--layout review` 导出
+  - `projection` 范畴的 `stale/missing/corrupt/untraceable/schema mismatch/metadata invalid` 校验
+
+- 已修复的关键问题
+  - projection auto rebuild 的 SQLite 连接泄漏
+  - projection-backed 查询对 rowid 输入的回归
+  - `query actions` 对 ACT 原始 `data` 的保真回归
+  - `project_map` 空导航实现
+
+- 仍在持续收口
+  - projection payload 的严格 shape 校验
+  - review 导出统计口径的严格语义
+  - 极端并发场景下 projection freshness 的更强证明
 
 ---
 

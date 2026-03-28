@@ -8,6 +8,8 @@
 
 **Tech Stack:** Python 3.11+, Typer, stdlib `sqlite3`, pytest, existing `dfmea_cli` package, Markdown skill/docs.
 
+> **Progress Update (2026-03-28):** This plan is no longer purely prospective. Phase 1 and substantial parts of Phase 2 have been implemented in the current branch, including projection schema/bootstrap, dirty tracking, projection commands, projection-backed query commands, review export layout, and baseline projection validation. The remaining value of this plan is now as an audit trail and as a checklist for any follow-up hardening work.
+
 ---
 
 ## File Structure
@@ -82,6 +84,12 @@ This plan is intentionally split into two implementation phases:
 - Phase 2: new `query map` / `query bundle` / `query dossier` commands and broader dossier-oriented UX
 
 Do not start Phase 2 until Phase 1 passes full regression tests.
+
+## Status Snapshot
+
+- Phase 1: effectively completed
+- Phase 2: core command surface completed (`map` / `bundle` / `dossier`), with additional review/export and validation hardening also completed
+- Remaining follow-up work is now mostly quality hardening rather than missing core features
 
 ### Task 1: Projection Schema, Init Metadata, And Upgrade Helpers
 
@@ -730,6 +738,24 @@ git commit -m "docs: route dfmea reads through projection-aware workflows"
   - `dfmea query map --db <db> --format json`
   - `dfmea query bundle --db <db> --comp <COMP-id> --format json`
   - `dfmea query dossier --db <db> --fn <FN-id> --format json`
+
+## Completion Notes
+
+The following items from this plan are implemented in the current codebase:
+
+- projection schema/bootstrap and legacy upgrade support
+- projection status/rebuild commands
+- dirty tracking on canonical writes
+- projection-backed `summary/by-ap/by-severity/actions`
+- `query map` / `query bundle` / `query dossier`
+- review export layout
+- projection validation baseline
+
+The remaining open items are no longer “core implementation missing” items. They are primarily:
+
+- stricter payload schema validation
+- more rigorous review/export statistics semantics
+- stronger evidence for concurrent freshness guarantees
 
 ## Notes For The Implementer
 
