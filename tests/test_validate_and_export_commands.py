@@ -603,3 +603,108 @@ def test_validate_reports_orphan_projection_as_error(cli_runner, tmp_path: Path)
         issue["scope"] == "projection" and issue["kind"] == "PROJECTION_UNTRACEABLE"
         for issue in payload["data"]["issues"]
     )
+
+
+def test_validate_reports_projection_metadata_shape_error(cli_runner, tmp_path: Path):
+    seeded = _seed_analysis_db(cli_runner, tmp_path)
+
+    conn = sqlite3.connect(seeded["db_path"])
+    try:
+        conn.execute("UPDATE projects SET data = ? WHERE id = ?", ("[]", "demo"))
+        conn.commit()
+    finally:
+        conn.close()
+
+    validate_result = cli_runner.invoke(
+        ["validate", "--db", str(seeded["db_path"]), "--format", "json"]
+    )
+
+    payload = _payload(validate_result)
+    assert validate_result.exit_code != 0
+    assert any(
+        issue["scope"] == "projection"
+        and issue["kind"] == "PROJECTION_METADATA_INVALID"
+        for issue in payload["data"]["issues"]
+    )
+
+
+def test_validate_reports_projection_metadata_type_error(cli_runner, tmp_path: Path):
+    seeded = _seed_analysis_db(cli_runner, tmp_path)
+
+    rebuild_result = cli_runner.invoke(
+        [
+            "projection",
+            "rebuild",
+            "--db",
+            str(seeded["db_path"]),
+            "--format",
+            "json",
+        ]
+    )
+    assert rebuild_result.exit_code == 0, rebuild_result.stdout
+
+    conn = sqlite3.connect(seeded["db_path"])
+    try:
+        row = conn.execute(
+            "SELECT data FROM projects WHERE id = ?", ("demo",)
+        ).fetchone()
+        project_data = json.loads(row[0])
+        project_data["canonical_revision"] = "oops"
+        conn.execute(
+            "UPDATE projects SET data = ? WHERE id = ?",
+            (json.dumps(project_data, sort_keys=True), "demo"),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    validate_result = cli_runner.invoke(
+        ["validate", "--db", str(seeded["db_path"]), "--format", "json"]
+    )
+
+    payload = _payload(validate_result)
+    assert validate_result.exit_code != 0
+    assert any(
+        issue["scope"] == "projection"
+        and issue["kind"] == "PROJECTION_METADATA_INVALID"
+        for issue in payload["data"]["issues"]
+    )
+
+
+def test_validate_reports_projection_row_revision_mismatch(cli_runner, tmp_path: Path):
+    seeded = _seed_analysis_db(cli_runner, tmp_path)
+
+    rebuild_result = cli_runner.invoke(
+        [
+            "projection",
+            "rebuild",
+            "--db",
+            str(seeded["db_path"]),
+            "--format",
+            "json",
+        ]
+    )
+    assert rebuild_result.exit_code == 0, rebuild_result.stdout
+
+    conn = sqlite3.connect(seeded["db_path"])
+    try:
+        conn.execute(
+            "UPDATE derived_views SET canonical_revision = ? WHERE project_id = ? AND kind = ? AND scope_ref = ?",
+            (0, "demo", "component_bundle", seeded["comp_id"]),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    validate_result = cli_runner.invoke(
+        ["validate", "--db", str(seeded["db_path"]), "--format", "json"]
+    )
+
+    payload = _payload(validate_result)
+    assert validate_result.exit_code == 0
+    assert any(
+        issue["scope"] == "projection"
+        and issue["kind"] == "STALE_PROJECTION"
+        and issue["target"].get("kind") == "component_bundle"
+        for issue in payload["data"]["issues"]
+    )

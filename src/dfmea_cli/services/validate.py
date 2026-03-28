@@ -432,12 +432,46 @@ def _validate_projection_state(
     try:
         project_data = json.loads(project_row[0] or "{}")
     except json.JSONDecodeError:
+        issues.append(
+            _issue(
+                level="error",
+                scope="projection",
+                kind="PROJECTION_METADATA_INVALID",
+                target={"project_id": project_id},
+                reason="Project projection metadata is not valid JSON.",
+                suggested_action="Repair projects.data before running projection-backed maintenance commands.",
+            )
+        )
         return issues
     if not isinstance(project_data, dict):
+        issues.append(
+            _issue(
+                level="error",
+                scope="projection",
+                kind="PROJECTION_METADATA_INVALID",
+                target={"project_id": project_id},
+                reason="Project projection metadata must decode to a JSON object.",
+                suggested_action="Repair projects.data before running projection-backed maintenance commands.",
+            )
+        )
         return issues
 
-    canonical_revision = int(project_data.get("canonical_revision", 0))
-    last_projection_revision = int(project_data.get("last_projection_revision", 0))
+    try:
+        canonical_revision = int(project_data.get("canonical_revision", 0))
+        last_projection_revision = int(project_data.get("last_projection_revision", 0))
+    except (TypeError, ValueError):
+        issues.append(
+            _issue(
+                level="error",
+                scope="projection",
+                kind="PROJECTION_METADATA_INVALID",
+                target={"project_id": project_id},
+                reason="Project projection metadata contains invalid revision fields.",
+                suggested_action="Repair canonical_revision/last_projection_revision in projects.data.",
+            )
+        )
+        return issues
+
     projection_dirty = bool(project_data.get("projection_dirty", False))
     projection_schema_version = str(
         project_data.get("projection_schema_version", PROJECTION_SCHEMA_VERSION)
@@ -476,7 +510,7 @@ def _validate_projection_state(
         )
 
     rows = conn.execute(
-        "SELECT kind, scope_ref, data FROM derived_views WHERE project_id = ? ORDER BY kind, scope_ref",
+        "SELECT kind, scope_ref, canonical_revision, data FROM derived_views WHERE project_id = ? ORDER BY kind, scope_ref",
         (project_id,),
     ).fetchall()
     available_keys = {(str(row["kind"]), str(row["scope_ref"])) for row in rows}
@@ -519,6 +553,23 @@ def _validate_projection_state(
         )
 
     for row in rows:
+        if int(row["canonical_revision"]) != canonical_revision:
+            issues.append(
+                _issue(
+                    level="warning",
+                    scope="projection",
+                    kind="STALE_PROJECTION",
+                    target={
+                        "project_id": project_id,
+                        "kind": row["kind"],
+                        "scope_ref": row["scope_ref"],
+                        "canonical_revision": canonical_revision,
+                        "row_canonical_revision": int(row["canonical_revision"]),
+                    },
+                    reason="Projection row revision does not match the project canonical revision.",
+                    suggested_action="Run `dfmea projection rebuild` to refresh derived views.",
+                )
+            )
         try:
             decoded = json.loads(row["data"])
         except json.JSONDecodeError:
