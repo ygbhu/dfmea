@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "dfmea.generate_initial_analysis.output.v1",
+  "title": "Generate Initial DFMEA Analysis Output",
+  "type": "object",
+  "properties": {
+    "result_type": {
+      "type": "string",
+      "const": "ai_draft_proposal"
+    },
+    "summary": {
+      "type": "string"
+    },
+    "draft_batch": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "goal": {
+          "type": "string"
+        },
+        "operations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "required": ["operations"],
+      "additionalProperties": true
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": ["result_type", "summary", "draft_batch"],
+  "additionalProperties": true
+}

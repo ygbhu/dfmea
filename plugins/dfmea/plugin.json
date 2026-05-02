@@ -1,0 +1,189 @@
+{
+  "manifest_version": "0.1.0",
+  "plugin": {
+    "plugin_id": "dfmea",
+    "name": "DFMEA",
+    "version": "0.1.0",
+    "domain": "fmea",
+    "description": "Design FMEA domain plugin."
+  },
+  "capabilities": {
+    "artifacts": true,
+    "edges": true,
+    "skills": true,
+    "validators": true,
+    "projections": true,
+    "exporters": false,
+    "views": true,
+    "knowledge": false
+  },
+  "schemas": [
+    {
+      "schema_id": "dfmea.system.v1",
+      "kind": "artifact",
+      "version": "1.0.0",
+      "path": "schemas/artifacts/base_artifact.schema.json"
+    },
+    {
+      "schema_id": "dfmea.subsystem.v1",
+      "kind": "artifact",
+      "version": "1.0.0",
+      "path": "schemas/artifacts/base_artifact.schema.json"
+    },
+    {
+      "schema_id": "dfmea.component.v1",
+      "kind": "artifact",
+      "version": "1.0.0",
+      "path": "schemas/artifacts/base_artifact.schema.json"
+    },
+    {
+      "schema_id": "dfmea.function.v1",
+      "kind": "artifact",
+      "version": "1.0.0",
+      "path": "schemas/artifacts/base_artifact.schema.json"
+    },
+    {
+      "schema_id": "dfmea.requirement.v1",
+      "kind": "artifact",
+      "version": "1.0.0",
+      "path": "schemas/artifacts/base_artifact.schema.json"
+    },
+    {
+      "schema_id": "dfmea.characteristic.v1",
+      "kind": "artifact",
+      "version": "1.0.0",
+      "path": "schemas/artifacts/base_artifact.schema.json"
+    },
+    {
+      "schema_id": "dfmea.failure_mode.v1",
+      "kind": "artifact",
+      "version": "1.0.0",
+      "path": "schemas/artifacts/risk_artifact.schema.json"
+    },
+    {
+      "schema_id": "dfmea.failure_effect.v1",
+      "kind": "artifact",
+      "version": "1.0.0",
+      "path": "schemas/artifacts/risk_artifact.schema.json"
+    },
+    {
+      "schema_id": "dfmea.failure_cause.v1",
+      "kind": "artifact",
+      "version": "1.0.0",
+      "path": "schemas/artifacts/risk_artifact.schema.json"
+    },
+    {
+      "schema_id": "dfmea.action.v1",
+      "kind": "artifact",
+      "version": "1.0.0",
+      "path": "schemas/artifacts/action.schema.json"
+    },
+    {
+      "schema_id": "dfmea.edge.v1",
+      "kind": "edge",
+      "version": "1.0.0",
+      "path": "schemas/edges/relationship.schema.json"
+    },
+    {
+      "schema_id": "dfmea.generate_initial_analysis.input.v1",
+      "kind": "skill_input",
+      "version": "1.0.0",
+      "path": "schemas/skills/generate_initial_analysis.input.schema.json"
+    },
+    {
+      "schema_id": "dfmea.generate_initial_analysis.output.v1",
+      "kind": "skill_output",
+      "version": "1.0.0",
+      "path": "schemas/skills/generate_initial_analysis.output.schema.json"
+    },
+    {
+      "schema_id": "dfmea.validate_analysis.input.v1",
+      "kind": "skill_input",
+      "version": "1.0.0",
+      "path": "schemas/validators/validate_analysis.input.schema.json"
+    },
+    {
+      "schema_id": "dfmea.validate_analysis.output.v1",
+      "kind": "skill_output",
+      "version": "1.0.0",
+      "path": "schemas/validators/validate_analysis.output.schema.json"
+    },
+    {
+      "schema_id": "dfmea.working_tree.v1",
+      "kind": "projection",
+      "version": "1.0.0",
+      "path": "schemas/projections/working_tree.schema.json"
+    },
+    {
+      "schema_id": "dfmea.export_payload.v1",
+      "kind": "projection",
+      "version": "1.0.0",
+      "path": "schemas/projections/export_payload.schema.json"
+    }
+  ],
+  "skills": [
+    {
+      "skill_id": "generate_initial_analysis",
+      "name": "Generate Initial Analysis",
+      "description": "Generate a structured initial analysis proposal for the current DFMEA task scope.",
+      "version": "0.1.0",
+      "input_schema": "dfmea.generate_initial_analysis.input.v1",
+      "output_schema": "dfmea.generate_initial_analysis.output.v1",
+      "handler_ref": "skills/generate_initial_analysis.ts",
+      "prompt_ref": "prompts/generate_initial_analysis.md",
+      "side_effect": "returns_ai_draft_proposal",
+      "result_types": ["ai_draft_proposal"]
+    }
+  ],
+  "validators": [
+    {
+      "validator_id": "validate_analysis",
+      "name": "Validate DFMEA Analysis",
+      "version": "0.1.0",
+      "target": "artifact_graph",
+      "input_schema": "dfmea.validate_analysis.input.v1",
+      "output_schema": "dfmea.validate_analysis.output.v1",
+      "handler_ref": "validators/validate_analysis.ts",
+      "severity": "blocking"
+    }
+  ],
+  "projections": [
+    {
+      "kind": "working_tree",
+      "category": "working",
+      "payload_schema": "dfmea.working_tree.v1",
+      "handler_ref": "projections/working_tree.ts",
+      "scope": ["project"],
+      "vectorizable": false
+    },
+    {
+      "kind": "export_payload",
+      "category": "export",
+      "payload_schema": "dfmea.export_payload.v1",
+      "handler_ref": "projections/export_payload.ts",
+      "scope": ["project"],
+      "vectorizable": false
+    }
+  ],
+  "exporters": [],
+  "views": [
+    {
+      "view_id": "main_workspace",
+      "name": "DFMEA Working Tree",
+      "projection_kind": "working_tree",
+      "view_type": "tree",
+      "metadata": {
+        "primary": true
+      }
+    }
+  ],
+  "requirements": {
+    "platform_capabilities": ["workspace_capabilities"]
+  },
+  "compatibility": {
+    "platform_version": ">=0.1.0",
+    "manifest_version": "0.1.x",
+    "schema_migration": "manual"
+  },
+  "metadata": {}
+}

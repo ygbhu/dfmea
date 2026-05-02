@@ -1,0 +1,13 @@
+{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend development guide"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend development guide"}
+{"file": "DEVELOPMENT_PLAN.md", "reason": "Phase 0 source plan and acceptance criteria"}
+{"file": "TECH_STACK_DECISION.md", "reason": "Locked stack choices for scaffold"}
+{"file": "DEVELOPMENT_READINESS_AUDIT.md", "reason": "Readiness constraints and MVP boundaries"}
+{"file": ".trellis\\spec\\backend\\directory-structure.md", "reason": "Backend layout guidance"}
+{"file": ".trellis\\spec\\backend\\quality-guidelines.md", "reason": "Backend quality baseline"}
+{"file": ".trellis\\spec\\frontend\\directory-structure.md", "reason": "Frontend layout guidance"}
+{"file": ".trellis\\spec\\frontend\\quality-guidelines.md", "reason": "Frontend quality baseline"}
+{"file": ".trellis\\spec\\frontend\\type-safety.md", "reason": "Frontend TypeScript guidance"}
+{"file": ".trellis\\spec\\guides\\cross-layer-thinking-guide.md", "reason": "Cross-layer scaffold decisions"}
+{"file": ".trellis\\spec\\guides\\code-reuse-thinking-guide.md", "reason": "Avoid duplicated workspace config"}

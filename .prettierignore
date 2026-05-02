@@ -1,0 +1,7 @@
+node_modules
+dist
+coverage
+legacy
+OpenCodeUI
+architecture-system-architecture.png
+pnpm-lock.yaml

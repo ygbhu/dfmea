@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DFMEA Validation Output",
+  "type": "object",
+  "properties": {
+    "status": { "type": "string", "enum": ["passed", "failed"] },
+    "findings": { "type": "array" }
+  },
+  "required": ["status", "findings"],
+  "additionalProperties": true
+}

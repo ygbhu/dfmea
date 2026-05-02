@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DFMEA Base Artifact",
+  "type": "object",
+  "properties": {
+    "title": { "type": "string" },
+    "display_id": { "type": "string" },
+    "description": { "type": "string" }
+  },
+  "required": ["title", "display_id"],
+  "additionalProperties": true
+}
