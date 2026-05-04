@@ -1,0 +1,26 @@
+{
+  "name": "opencode-quality-assistant",
+  "version": "0.1.0",
+  "description": "OpenCode-bound quality assistant plugin backed by the Python quality engine.",
+  "type": "module",
+  "license": "UNLICENSED",
+  "bin": {
+    "opencode-quality": "./bin/opencode-quality.js"
+  },
+  "exports": {
+    ".": "./plugin.js"
+  },
+  "files": [
+    "bin/",
+    "plugin.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "doctor": "node ./bin/opencode-quality.js doctor",
+    "status": "node ./bin/opencode-quality.js status",
+    "init": "node ./bin/opencode-quality.js init"
+  }
+}

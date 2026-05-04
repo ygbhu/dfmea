@@ -33,21 +33,8 @@ max_journal_lines: 2000
 #     - "echo 'Task archived'"
 
 #-------------------------------------------------------------------------------
-# Monorepo / Packages
+# Repository Shape
 #-------------------------------------------------------------------------------
 
-# Declare packages for monorepo projects.
-# Trellis auto-detects workspaces during `trellis init`, but you can also
-# configure them manually here.
-#
-# packages:
-#   frontend:
-#     path: packages/frontend
-#   backend:
-#     path: packages/backend
-#   docs:
-#     path: docs-site
-#     type: submodule
-
-# Default package used when --package is not specified.
-# default_package: frontend
+# This project is currently a single-repo Python CLI/core codebase.
+# Do not configure the retired TypeScript monorepo packages here.

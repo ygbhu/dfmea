@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Function",
+  "type": "object",
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": {"const": "quality.ai/v1"},
+    "kind": {"const": "Function"},
+    "metadata": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {"id": {"pattern": "^FN-[0-9]{3,}$"}}
+    },
+    "spec": {"type": "object"}
+  }
+}

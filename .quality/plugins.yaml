@@ -1,0 +1,7 @@
+apiVersion: quality.ai/v1
+kind: WorkspacePlugins
+spec:
+  builtins:
+  - dfmea
+  enabledByDefault:
+  - dfmea

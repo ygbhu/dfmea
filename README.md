@@ -1,157 +1,209 @@
-# DFMEA Workspace
+# OpenCode Quality Assistant
 
-AI-first Quality Engineering Workspace for DFMEA drafting, review, projection, and API Push integration.
+这是一个 **绑定 OpenCode 使用** 的质量管理助理。OpenCode 是产品宿主和主要交互入口；
+Python engine 是内部质量引擎，负责 DFMEA/PFMEA 方法、项目文件、校验、投影、导出和 Git
+工作流。
 
-This repository contains the MVP baseline for a quality engineering workspace where an Agent Runtime can generate DFMEA draft data, the user can review and apply it, and the platform can rebuild confirmed projections and push structured output to a mature FMEA system adapter.
+## 产品边界
 
-## Current Status
+- 用户入口：OpenCode / OpenCode UI。
+- 产品插件：`plugin/`，提供 `opencode-quality` 和 OpenCode npm plugin。
+- 内部引擎：`engine/`，Python 3.11+、Typer CLI、本地 YAML/JSON 项目文件。
+- 当前 active 方法：DFMEA。
+- PFMEA：仅保留 planned 占位，后续单独实现。
+- 存储：`projects/<slug>/` 下的 Git-friendly 文件。
+- 不使用 SQLite/PostgreSQL 作为目标存储。
 
-The Phase 0-12 MVP baseline is implemented:
-
-- TypeScript pnpm workspace.
-- NestJS Platform API.
-- React workspace UI.
-- shared contracts and SDK packages.
-- DFMEA domain plugin MVP.
-- PostgreSQL schema and migrations.
-- mock knowledge provider.
-- mock runtime provider.
-- AI Draft Batch, Draft Patch, apply, and reject flow.
-- working tree projection rebuild and freshness tracking.
-- API Push validate and execute flow against a mock mature FMEA adapter.
-- unit, integration, component, and browser E2E coverage.
-
-## Product Scope
-
-The platform is an AI-first workspace, not a full enterprise FMEA lifecycle system.
-
-The core flow is:
+## 目录
 
 ```text
-User Goal
-  -> Agent Runtime
-  -> Workspace Capability Server / Platform API
-  -> Domain Plugin Skill
-  -> AI Draft Batch
-  -> User Review / Apply
-  -> Canonical Artifact and Edge Data
-  -> Workspace Revision
-  -> Projection Rebuild
-  -> Knowledge Query / API Push
+plugin/                     # OpenCode 产品入口，npm plugin + opencode-quality CLI
+engine/                     # Python quality engine and CLI package
+  src/quality_core/         # workspace/project/resource/validation/projection/Git
+  src/quality_methods/      # dfmea active, pfmea placeholder
+  src/quality_adapters/     # CLI and generated OpenCode templates
+ui/                         # OpenCode UI host for standard manual testing
+scripts/quality_cli.py      # repo-root development runner
+.opencode/                  # generated OpenCode commands, skills, and hook for this checkout
+docs/                       # requirements, architecture, design, development plan
 ```
 
-Enterprise permissions, approval workflows, signoff, official release, long-term compliance records, and final quality ownership are expected to remain in the mature FMEA system.
+## 最重要的目录规则
 
-## Repository Layout
+当前源码开发和 OpenCode UI 联调时，先进入本项目根目录：
+
+```powershell
+cd E:\study\dfmeaDemo
+```
+
+原因是 OpenCode 和开发脚本需要从这个目录读取：
+
+- `.opencode/`
+- `scripts/quality_cli.py`
+- `plugin/`
+- `engine/`
+- `ui/`
+
+如果在其他目录启动 `opencode serve`，OpenCode 可能读不到 `.opencode/commands` 和
+`.opencode/plugins/quality-assistant.js`，slash commands 就不会出现。
+
+后续正式交付给其他用户后，用户不需要进入你的源码目录。用户应该在自己的质量项目目录执行：
+
+```powershell
+opencode-quality init --workspace .
+opencode serve --cors http://localhost:5173
+```
+
+简单区分：
 
 ```text
-apps/
-  api/                 NestJS Platform API, services, repositories, migrations
-  web/                 React workspace UI
-packages/
-  shared/              shared contracts, IDs, events, statuses, errors
-  plugin-sdk/          domain plugin SDK primitives
-  capability-sdk/      capability server SDK primitives
-plugins/
-  dfmea/               DFMEA plugin skills, validators, projections, prompts
-docs/                  architecture, detailed design, planning, acceptance docs
-tests/e2e/             Playwright browser acceptance tests
-infra/                 local infrastructure notes
+开发这个产品：进入 E:\study\dfmeaDemo
+使用这个产品：进入用户自己的质量项目目录
 ```
 
-`legacy/` and `OpenCodeUI/` are reference assets and are ignored by Git in this project.
+## 第一次开发准备
 
-## Prerequisites
-
-- Node.js `>=24`
-- pnpm `>=10.33.2`
-- PostgreSQL with pgvector
-- Chrome or Edge for Playwright E2E
-
-Docker is not required for the current acceptance flow. Use a remote PostgreSQL instance through `.env`.
-
-## Environment
-
-Create `.env` from `.env.example` and set the PostgreSQL connection string:
+在源码根目录执行：
 
 ```powershell
-Copy-Item .env.example .env
+cd E:\study\dfmeaDemo
+npm run engine:install
+npm run opencode:init
+npm run opencode:doctor
 ```
 
-```env
-DATABASE_URL=postgres://postgres:password@host:5432/vector_db
-```
+`opencode:init` 会刷新：
 
-Optional environment variables:
-
-- `PORT`: API server port. Default: `3000`.
-- `VITE_API_BASE_URL`: web client API base URL. Default: `http://localhost:3000`.
-- `PLAYWRIGHT_CHROME_EXECUTABLE_PATH`: local browser path for E2E if Playwright cannot find Chrome automatically.
-
-Do not commit real credentials. `.env` and `.env.*` are ignored.
-
-## Quick Start
-
-Install dependencies:
+- `.opencode/commands/*.md`
+- `.opencode/skills/*/SKILL.md`
+- `.opencode/plugins/quality-assistant.js`
+开发模式默认不写 `opencode.json`，而是让 OpenCode 直接加载 `.opencode/plugins/*.js`。发布后的
+npm 插件模式使用：
 
 ```powershell
-pnpm install
+npm run opencode:init:npm
 ```
 
-Apply database migrations:
+这会额外写入 `opencode.json`：
+
+```json
+{
+  "plugin": ["opencode-quality-assistant"]
+}
+```
+
+`npm run opencode:doctor` 会检查 Node、Python、OpenCode CLI 和质量方法发现状态。当前如果看到
+`opencode: not found`，说明还需要先安装 OpenCode CLI。
+
+## 核心 CLI 测试
+
+不依赖 OpenCode，先确认 Python 质量引擎能跑：
 
 ```powershell
-pnpm db:migrate
+cd E:\study\dfmeaDemo
+python .\scripts\quality_cli.py quality method list --workspace .
+python .\scripts\quality_cli.py quality workspace init --workspace .run\dev-test --force
+python .\scripts\quality_cli.py quality project create demo --workspace .run\dev-test
+python .\scripts\quality_cli.py dfmea init --workspace .run\dev-test --project demo
+python .\scripts\quality_cli.py dfmea validate --workspace .run\dev-test --project demo
 ```
 
-Start API and web together:
+期望：
+
+- DFMEA 是 `active`
+- PFMEA 是 `planned`
+- `dfmea validate` 可以返回成功，允许 warning
+
+## OpenCode / UI 联调
+
+终端 1：
 
 ```powershell
-pnpm dev
+cd E:\study\dfmeaDemo
+opencode serve --cors http://localhost:5173 --port 4096
 ```
 
-Default local URLs:
-
-- API health check: `http://localhost:3000/health`
-- Web workspace: `http://localhost:5173`
-
-## Validation
-
-Run the main quality gates:
+终端 2：
 
 ```powershell
-pnpm build
-pnpm test
-pnpm lint
-pnpm typecheck
+cd E:\study\dfmeaDemo\ui
+npm install
+npm run dev
 ```
 
-Run browser acceptance:
+在 UI 里测试：
+
+```text
+查看当前质量方法列表，并说明 DFMEA 和 PFMEA 当前状态
+/dfmea-smoke
+/quality-bootstrap demo
+/quality-status demo
+```
+
+期望：
+
+- Agent 能识别 DFMEA active、PFMEA planned placeholder。
+- `/dfmea-smoke` 能在 `.run/` 下创建隔离测试项目。
+- `/quality-bootstrap demo` 能创建 workspace/project/DFMEA。
+- `/quality-status demo` 能汇总方法、插件、项目状态、校验和投影状态。
+
+如果 slash commands 不出现，先检查：
 
 ```powershell
-pnpm e2e
+cd E:\study\dfmeaDemo
+Test-Path .\.opencode\commands\dfmea-smoke.md
+Test-Path .\.opencode\plugins\quality-assistant.js
 ```
 
-`pnpm e2e` starts or reuses:
+并确认 `opencode serve` 是从 `E:\study\dfmeaDemo` 启动的。
 
-- API server on `http://127.0.0.1:3000`
-- Web server on `http://127.0.0.1:5173`
+## 开发命令
 
-The E2E flow covers workspace bootstrap, mock runtime draft generation, draft review, apply, working tree refresh, API Push validation, and API Push execution.
+```powershell
+cd E:\study\dfmeaDemo
+npm run quality -- method list --workspace .
+npm run dfmea -- --help
+npm run check:engine
+```
 
-## Main Documents
+也可以直接使用 root runner：
 
-- [Architecture](docs/ARCHITECTURE.md)
-- [Development Plan](docs/DEVELOPMENT_PLAN.md)
-- [Running And Acceptance](docs/RUNNING_AND_ACCEPTANCE.md)
-- [Workspace UI Design](docs/WORKSPACE_UI_DESIGN.md)
-- [Platform API Design](docs/PLATFORM_API_DESIGN.md)
-- [DFMEA Plugin Design](docs/DFMEA_PLUGIN_DESIGN.md)
-- [Documentation Index](docs/README.md)
+```powershell
+python .\scripts\quality_cli.py quality method list --workspace .
+python .\scripts\quality_cli.py dfmea validate --workspace . --project demo
+```
 
-## Development Notes
+Python engine 内部检查：
 
-- Keep the workspace UI data sources separate: Working Tree, Draft Preview, Runtime Events, and API Push.
-- The Structure plugin is the default left-side plugin; Draft Review, Runtime Events, and API Push are switchable plugins.
-- Do not call domain plugin handlers directly from the UI.
-- Prefer adding new product work through a scoped task and update docs when contracts change.
+```powershell
+cd engine
+python -m ruff check src\quality_adapters src\dfmea_cli src\quality_core src\quality_methods tests
+python -m compileall -q src tests
+python -m pytest
+```
+
+## 交付方向
+
+短期交付：
+
+```powershell
+npm install -g opencode-quality-assistant
+opencode-quality init --workspace .
+opencode serve --cors http://localhost:5173
+```
+
+这时用户应该在自己的项目目录执行，不需要进入 `E:\study\dfmeaDemo`。
+
+长期 UI：
+
+- OpenCode UI 继续作为对话和宿主入口。
+- 后续自研质量管理 UI 可以二开 OpenCode UI。
+- UI 不直接实现 DFMEA/PFMEA 业务写逻辑，只消费 Python engine 的 CLI/投影/未来本地 API。
+
+## 权威文档
+
+- `docs/requirements/local-first-quality-assistant-requirements.md`
+- `docs/architecture/local-first-quality-assistant-architecture.md`
+- `docs/design/local-first-quality-assistant-detailed-design.md`
+- `docs/design/current-dfmea-cli-migration-map.md`
+- `docs/development/local-first-quality-assistant-development-plan.md`

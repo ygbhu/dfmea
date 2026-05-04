@@ -1,0 +1,63 @@
+apiVersion: quality.ai/v1
+kind: PluginDescriptor
+metadata:
+  pluginId: dfmea
+  version: dfmea.ai/v1
+spec:
+  domain:
+    key: dfmea
+    root: ./dfmea
+  singletons:
+    - kind: DfmeaAnalysis
+      id: DFMEA
+      file: dfmea.yaml
+      schema: dfmea-analysis.schema.json
+  collections:
+    - kind: StructureNode
+      directory: structure
+      fileName: "{id}.yaml"
+      idPrefix: SYS|SUB|COMP
+      schema: structure-node.schema.json
+      titleField: metadata.title
+    - kind: Function
+      directory: functions
+      fileName: "{id}.yaml"
+      idPrefix: FN
+      schema: function.schema.json
+      titleField: metadata.title
+    - kind: Requirement
+      directory: requirements
+      fileName: "{id}.yaml"
+      idPrefix: REQ
+      schema: requirement.schema.json
+      titleField: metadata.title
+    - kind: Characteristic
+      directory: characteristics
+      fileName: "{id}.yaml"
+      idPrefix: CHAR
+      schema: characteristic.schema.json
+      titleField: metadata.title
+    - kind: FailureMode
+      directory: failure-modes
+      fileName: "{id}.yaml"
+      idPrefix: FM
+      schema: failure-mode.schema.json
+      titleField: metadata.title
+    - kind: FailureEffect
+      directory: effects
+      fileName: "{id}.yaml"
+      idPrefix: FE
+      schema: failure-effect.schema.json
+      titleField: metadata.title
+    - kind: FailureCause
+      directory: causes
+      fileName: "{id}.yaml"
+      idPrefix: FC
+      schema: failure-cause.schema.json
+      titleField: metadata.title
+    - kind: Action
+      directory: actions
+      fileName: "{id}.yaml"
+      idPrefix: ACT
+      schema: action.schema.json
+      titleField: spec.description

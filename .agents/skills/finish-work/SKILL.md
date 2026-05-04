@@ -1,6 +1,6 @@
 ---
 name: finish-work
-description: "Pre-commit quality checklist covering lint, typecheck, tests, code-spec sync, API changes, database migrations, cross-layer verification, and manual testing. Blocks commit if infra or cross-layer specs lack executable depth. Use when code is written and tested but not yet committed, before submitting changes, or as a final review before git commit."
+description: "Pre-commit quality checklist for the Python local-first quality assistant. Runs pytest, ruff, compileall, verifies docs/spec sync, and checks that retired TypeScript/DB paths were not restored. Use when code is written and tested but not yet committed, before submitting changes, or as a final review before git commit."
 ---
 
 # Finish Work - Pre-Commit Checklist
@@ -17,25 +17,23 @@ Before submitting or committing, use this checklist to ensure work completeness.
 
 ```bash
 # Must pass
-pnpm lint
-pnpm type-check
-pnpm test
+python -m pytest
+python -m ruff check src\quality_adapters src\dfmea_cli src\quality_core src\quality_methods tests
+python -m compileall -q src tests
 ```
 
-- [ ] `pnpm lint` passes with 0 errors?
-- [ ] `pnpm type-check` passes with no type errors?
+- [ ] `python -m pytest` passes?
+- [ ] `python -m ruff check ...` passes?
+- [ ] `python -m compileall -q src tests` passes?
 - [ ] Tests pass?
-- [ ] No `console.log` statements (use logger)?
-- [ ] No non-null assertions (the `x!` operator)?
-- [ ] No `any` types?
+- [ ] No restored `dfmea_cli.services`, SQLite source-of-truth code, TypeScript platform, or
+  PostgreSQL infrastructure?
 
 ### 2. Code-Spec Sync
 
 **Code-Spec Docs**:
 - [ ] Does `.trellis/spec/backend/` need updates?
   - New patterns, new modules, new conventions
-- [ ] Does `.trellis/spec/frontend/` need updates?
-  - New components, new hooks, new patterns
 - [ ] Does `.trellis/spec/guides/` need updates?
   - New cross-layer flows, lessons from bugs
 
@@ -57,23 +55,22 @@ If this change touches infra or cross-layer contracts, this is a blocking checkl
 **Block Rule**:
 If infra/cross-layer changed but the related spec is still abstract, do NOT finish. Run `$update-spec` manually first.
 
-### 3. API Changes
+### 3. CLI Contract Changes
 
-If you modified API endpoints:
+If you modified CLI command inputs or outputs:
 
 - [ ] Input schema updated?
 - [ ] Output schema updated?
-- [ ] API documentation updated?
-- [ ] Client code updated to match?
+- [ ] Error handling/spec docs updated?
+- [ ] Agent skill examples updated?
 
-### 4. Database Changes
+### 4. Retired Architecture Guard
 
-If you modified database schema:
+These are blockers:
 
-- [ ] Migration file created?
-- [ ] Schema file updated?
-- [ ] Related queries updated?
-- [ ] Seed data updated (if applicable)?
+- [ ] No SQLite/PostgreSQL target storage was added.
+- [ ] No `apps/api`, `apps/web`, `packages/*`, or old plugin SDK code was restored.
+- [ ] No unintegrated UI write path was added.
 
 ### 5. Cross-Layer Verification
 
@@ -81,15 +78,14 @@ If the change spans multiple layers:
 
 - [ ] Data flows correctly through all layers?
 - [ ] Error handling works at each boundary?
-- [ ] Types are consistent across layers?
-- [ ] Loading states handled?
+- [ ] Resource envelope, schema, validator, command output, and tests are consistent?
 
 ### 6. Manual Testing
 
-- [ ] Feature works in browser/app?
+- [ ] CLI command works with `--workspace` and `--project` where applicable?
 - [ ] Edge cases tested?
 - [ ] Error states tested?
-- [ ] Works after page refresh?
+- [ ] Generated projections/exports are treated as rebuildable output, not source?
 
 ---
 
@@ -97,7 +93,9 @@ If the change spans multiple layers:
 
 ```bash
 # 1. Code checks
-pnpm lint && pnpm type-check
+python -m pytest
+python -m ruff check src\quality_adapters src\dfmea_cli src\quality_core src\quality_methods tests
+python -m compileall -q src tests
 
 # 2. View changes
 git status
@@ -114,10 +112,10 @@ git diff --name-only
 |-----------|-------------|-------|
 | Code-spec docs not updated | Others don't know the change | Check .trellis/spec/ |
 | Spec text is abstract only | Easy regressions in infra/cross-layer changes | Require signature/contract/matrix/cases/tests |
-| Migration not created | Schema out of sync | Check db/migrations/ |
-| Types not synced | Runtime errors | Check shared types |
+| Retired architecture restored | Project direction drifts | Search for old TS/DB paths |
+| CLI contract docs stale | Agents call wrong commands | Check docs and skills |
 | Tests not updated | False confidence | Run full test suite |
-| Console.log left in | Noisy production logs | Search for console.log |
+| Generated files edited as source | Bad Git history | Check managed project paths |
 
 ---
 

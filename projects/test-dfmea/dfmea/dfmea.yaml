@@ -1,0 +1,7 @@
+apiVersion: quality.ai/v1
+kind: DfmeaAnalysis
+metadata:
+  name: Test DFMEA
+  id: DFMEA
+spec:
+  projectRef: test-dfmea

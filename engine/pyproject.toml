@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quality-assistant"
+version = "0.1.0"
+description = "Local-first quality assistant CLI for DFMEA project files"
+requires-python = ">=3.11"
+dependencies = ["typer>=0.12,<1", "PyYAML>=6,<7"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<9", "ruff>=0.4"]
+
+[project.scripts]
+dfmea = "quality_adapters.cli.dfmea:main"
+quality = "quality_adapters.cli.quality:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"quality_methods.dfmea" = ["schemas/*"]
+"quality_adapters.opencode.templates" = [
+  "commands/*.md",
+  "plugins/*.js",
+  "skills/*/SKILL.md",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

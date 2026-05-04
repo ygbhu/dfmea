@@ -1,0 +1,22 @@
+apiVersion: quality.ai/v1
+kind: QualityProject
+metadata:
+  id: PRJ
+  slug: test-dfmea
+  name: Test DFMEA
+spec:
+  domains:
+    dfmea:
+      enabled: true
+      root: ./dfmea
+    pfmea:
+      enabled: false
+      root: ./pfmea
+    controlPlan:
+      enabled: false
+      root: ./control-plan
+  generatedOutputs:
+    projectionsManaged: false
+    exportsManaged: false
+    reportsManaged: false
+    exportProfiles: []

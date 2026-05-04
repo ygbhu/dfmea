@@ -1,0 +1,12 @@
+apiVersion: quality.ai/v1
+kind: QualityWorkspace
+metadata:
+  name: default
+spec:
+  projectsRoot: projects
+  defaults:
+    generatedOutputs:
+      projectionsManaged: false
+      exportsManaged: false
+      reportsManaged: false
+      exportProfiles: []

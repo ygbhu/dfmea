@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DfmeaAnalysis",
+  "type": "object",
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": {"const": "quality.ai/v1"},
+    "kind": {"const": "DfmeaAnalysis"},
+    "metadata": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {"id": {"const": "DFMEA"}}
+    },
+    "spec": {"type": "object"}
+  }
+}
